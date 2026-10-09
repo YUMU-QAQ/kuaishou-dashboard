@@ -1,0 +1,26 @@
+# === 密钥，绝对不要上传 ===
+.env
+
+# === 运行时数据 ===
+data.db
+data.db-journal
+*.db
+*.sqlite
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# === 罗盘生成产物与源数据，只保留脚本 ===
+luopan/*
+!luopan/*.py
+
+# === Office 临时锁文件 ===
+.~lock.*
+
+# === 系统 ===
+.DS_Store
+Thumbs.db

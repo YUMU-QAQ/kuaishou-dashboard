@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>快手每日数据看板</title>
+<style>
+:root{color-scheme:light;
+--primary:#1E40AF;--primary-hover:#1B3A9B;--secondary:#3B82F6;--accent:#D97706;
+--bg:#F6F8FC;--fg:#16264F;--card:#fff;--muted:#EEF2F9;--muted-fg:#586A88;
+--border:#DDE5F1;--border-strong:#C8D6E9;--ring:#1E40AF;
+--ok:#15803D;--bad:#B91C1C;--warn:#B45309;--info:#1D4ED8;
+--radius:10px;--radius-sm:7px;--radius-pill:999px;
+--shadow:0 1px 2px rgba(22,38,79,.05),0 1px 3px rgba(22,38,79,.04);
+--shadow-md:0 2px 8px rgba(22,38,79,.08),0 1px 3px rgba(22,38,79,.04);
+--barh:0px}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+font:14px/1.5 -apple-system,"Segoe UI",Roboto,"Helvetica Neue","Microsoft YaHei",sans-serif;
+font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+.wrap{padding:0 24px 40px;max-width:1680px;margin:0 auto}
+
+/* ---- 顶栏 + 工具条（吸顶） ---- */
+.sticky{position:sticky;top:0;z-index:30;background:rgba(246,248,252,.92);
+backdrop-filter:saturate(1.4) blur(8px);border-bottom:1px solid var(--border)}
+.topbar{display:flex;align-items:center;gap:14px;padding:14px 24px 0;max-width:1680px;margin:0 auto}
+h1{font-size:18px;font-weight:700;margin:0;letter-spacing:-.01em;white-space:nowrap}
+h1:before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--primary);
+margin-right:9px;vertical-align:2px}
+#range-label{color:var(--muted-fg);font-size:12px;background:var(--muted);border:1px solid var(--border);
+padding:3px 10px;border-radius:var(--radius-pill);white-space:nowrap}
+.topbar .jump{margin-left:auto;display:flex;gap:2px;flex-wrap:wrap}
+.topbar .jump a{color:var(--muted-fg);text-decoration:none;font-size:12px;font-weight:500;
+padding:5px 9px;border-radius:var(--radius-sm);transition:background 150ms ease,color 150ms ease}
+.topbar .jump a:hover{background:var(--muted);color:var(--primary)}
+.topbar .authlink{color:var(--primary);text-decoration:none;font-size:13px;font-weight:600;
+border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 11px;background:var(--card);
+transition:border-color 150ms ease}
+.topbar .authlink:hover{border-color:var(--primary)}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 24px;max-width:1680px;margin:0 auto}
+.grp{display:flex;gap:8px;align-items:center}
+.sep{width:1px;height:22px;background:var(--border-strong)}
+.bar label{font-size:12px;color:var(--muted-fg)}
+input[type=date],.toolbar input{padding:7px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);
+font:inherit;font-size:13px;background:var(--card);color:var(--fg);
+transition:border-color 150ms ease,box-shadow 150ms ease}
+input[type=date]:focus,.toolbar input:focus{outline:none;border-color:var(--primary);
+box-shadow:0 0 0 3px rgba(30,64,175,.14)}
+.mbtn{padding:7px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--card);
+color:var(--muted-fg);font:inherit;font-size:13px;font-weight:600;cursor:pointer;
+transition:background 150ms ease,color 150ms ease,border-color 150ms ease}
+.mbtn:hover{border-color:var(--primary);color:var(--primary)}
+.mbtn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+.mbtn.primary:hover{color:#fff;background:var(--primary-hover)}
+#msg{color:var(--muted-fg);font-size:12px}
+
+/* ---- 区块标题 ---- */
+h2{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;margin:30px 0 12px;
+color:var(--fg);letter-spacing:.01em;scroll-margin-top:110px}
+h2:before{content:"";width:3px;height:14px;border-radius:2px;background:var(--primary);flex:none}
+h2[id]{cursor:default}
+h2 .sub{color:var(--muted-fg);font-size:12px;margin-bottom:0}
+.sub{color:var(--muted-fg);font-size:12px}
+
+/* ---- KPI ---- */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:10px;margin-bottom:4px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+padding:13px 15px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+transition:box-shadow 150ms ease,transform 150ms ease}
+.kpi:hover{box-shadow:var(--shadow-md)}
+.kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--secondary)}
+.kpi.accent:before{background:var(--accent)}
+.kpi .k{font-size:11px;font-weight:600;letter-spacing:.03em;color:var(--muted-fg)}
+.kpi .v{font-size:23px;font-weight:700;margin-top:5px;color:var(--primary);line-height:1.15;letter-spacing:-.01em}
+.kpi.accent .v{color:var(--accent)}
+.kpi.good .v{color:var(--ok)}
+.kpi.bad .v{color:var(--bad)}
+.kpi .dt{font-size:11px;margin-top:4px;color:var(--muted-fg)}
+.kpi .dt.up{color:var(--ok)}
+.kpi .dt.down{color:var(--bad)}
+
+/* ---- 表格 ---- */
+table{border-collapse:collapse;width:100%;background:var(--card);font-variant-numeric:tabular-nums}
+th,td{padding:8px 11px;text-align:right;border-bottom:1px solid var(--muted);white-space:nowrap}
+th{background:var(--muted);font-weight:600;color:var(--muted-fg);font-size:11px;letter-spacing:.02em;
+text-transform:uppercase;text-align:right;border-bottom:1px solid var(--border)}
+th:first-child,td:first-child{text-align:left}
+tbody tr:last-child td{border-bottom:0}
+tbody tr{transition:background 120ms ease}
+tbody tr:hover td{background:#F2F6FF}
+tr.acct{cursor:pointer}
+tr.acct .caret{color:var(--secondary);display:inline-block;transition:transform 180ms ease;
+margin-right:6px;font-size:9px}
+tr.acct.open .caret{transform:rotate(90deg)}
+tr.acct.open td{background:#F2F6FF}
+.detail td{padding:0;background:#FBFCFE}
+.detail .wrap{padding:10px 12px 14px}
+.vname{max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;
+vertical-align:bottom;text-align:left;color:var(--fg)}
+.hi{color:var(--bad);font-weight:600}
+.lo{color:var(--ok);font-weight:600}
+th.sortable{cursor:pointer;user-select:none;transition:color 150ms ease}
+th.sortable:hover{color:var(--primary)}
+th .ar{color:#9FB0C9;font-size:9px}
+th.asc .ar:before{content:"▲";color:var(--primary)}
+th.desc .ar:before{content:"▼";color:var(--primary)}
+
+/* ---- 过滤 / 工具 ---- */
+.toolbar{display:flex;gap:10px;align-items:center;margin:0 0 10px;flex-wrap:wrap}
+.toolbar input{width:230px}
+.filters{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:4px}
+.lchip{display:inline-flex;align-items:center;padding:5px 12px;border:1px solid var(--border);
+border-radius:var(--radius-pill);background:var(--card);color:var(--fg);font:inherit;font-size:12px;
+font-weight:500;cursor:pointer;transition:background 150ms ease,color 150ms ease,border-color 150ms ease}
+.lchip:hover{border-color:var(--primary)}
+.lchip.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+.legend{display:flex;gap:8px;font-size:12px;color:var(--muted-fg);margin:0 0 4px;flex-wrap:wrap}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.lchip.off{opacity:.5;background:var(--muted)}
+.lchip.off i{background:#C3CFDF!important}
+
+/* ---- 图表 / 卡片容器 ---- */
+.chart{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+padding:12px 12px 4px;box-shadow:var(--shadow)}
+.chart-box{height:330px;position:relative}
+.chart-tip{position:absolute;display:none;pointer-events:none;z-index:6;background:#fff;
+border:1px solid var(--border);border-radius:9px;padding:8px 10px;min-width:150px;
+box-shadow:0 6px 18px rgba(30,58,138,.14);font-size:12px}
+.chart-tip .tip-date{font-weight:600;color:var(--fg);margin-bottom:4px}
+.chart-tip .tip-row{display:flex;align-items:center;gap:6px;color:var(--muted-fg);white-space:nowrap}
+.chart-tip .tip-row b{margin-left:auto;color:var(--fg);font-variant-numeric:tabular-nums}
+.chart-tip i{width:8px;height:8px;border-radius:2px;display:inline-block;flex:none}
+.chart-guide{position:absolute;display:none;width:1px;background:#C8D6E9;pointer-events:none;z-index:5}
+.vname[data-pid]{cursor:pointer;border-bottom:1px dashed #A5B7D4}
+.vname[data-pid]:hover{color:var(--primary);border-bottom-color:var(--primary)}
+.modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center}
+.modal[hidden]{display:none}
+.modal-bg{position:absolute;inset:0;background:rgba(15,23,42,.55)}
+.modal-box{position:relative;background:#fff;border-radius:var(--radius);padding:14px 16px 16px;
+max-width:min(880px,92vw);box-shadow:0 20px 50px rgba(15,23,42,.3)}
+.modal-head{display:flex;align-items:center;gap:16px;margin-bottom:10px}
+.modal-head span{font-weight:600;font-size:13px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;
+white-space:nowrap;max-width:640px}
+.modal-head .mbtn{margin-left:auto;flex:none}
+#video-player{display:block;width:min(820px,86vw);max-height:64vh;background:#000;border-radius:8px}
+.chart svg{display:block;overflow:visible}
+.tablebox{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);
+background:var(--card);box-shadow:var(--shadow)}
+.tablebox>table{border:0;border-radius:0;width:auto;min-width:100%}
+.tablebox.tall{max-height:72vh;overflow:auto}
+.tablebox.tall thead th{position:sticky;top:0;z-index:2;box-shadow:inset 0 -1px 0 var(--border)}
+.ins-cards{display:grid;gap:9px;margin:0 0 6px}
+.ins-card{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);
+border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);font-size:13px;color:var(--fg);
+line-height:1.55}
+.ins-card.warn{border-left-color:var(--accent);background:#FFFCF5}
+.ins-sub{font-size:12px;color:var(--muted-fg);font-weight:400;margin-left:2px}
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:var(--radius-pill);white-space:nowrap}
+.b-add{background:#DCFCE7;color:#166534}
+.b-test{background:#DBEAFE;color:#1E3A8A}
+.b-cut{background:#FEE2E2;color:#991B1B}
+.b-watch{background:var(--muted);color:var(--muted-fg)}
+.top10-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:12px}
+.top10-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+box-shadow:var(--shadow);overflow:hidden}
+.top10-card .th{background:var(--muted);font-weight:600;color:var(--fg);font-size:12px;
+padding:9px 13px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;
+align-items:center;gap:10px}
+.top10-card table{min-width:100%}
+:focus-visible{outline:2px solid var(--ring);outline-offset:2px;border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---- 响应式 ---- */
+@media (max-width:1100px){
+  .topbar .jump{display:none}
+  .top10-grid{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  .wrap{padding:0 14px 32px}
+  .topbar,.bar{padding-left:14px;padding-right:14px}
+  h1{font-size:16px}
+  #range-label{display:none}
+  .bar{gap:8px}
+  .sep{display:none}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+  .toolbar input{width:100%}
+  .vname{max-width:200px}
+  .chart-box{height:260px}
+}
+</style>
+</head>
+<body>
+<div class="sticky">
+<header class="topbar">
+  <h1>快手每日数据看板</h1>
+  <span id="range-label"></span>
+  <nav class="jump">
+    <a href="#sec-trend">趋势</a>
+    <a href="#sec-accounts">账号</a>
+    <a href="#sec-plans">计划</a>
+    <a href="#sec-advice">建议</a>
+    <a href="#sec-action">行动</a>
+    <a href="#sec-top10">Top10</a>
+  </nav>
+  <a href="/auth" class="authlink">授权管理</a>
+</header>
+
+<div class="bar">
+  <div class="grp">
+    <label for="start">开始</label><input type="date" id="start">
+    <label for="end">结束</label><input type="date" id="end">
+    <button class="mbtn primary" onclick="loadData()">查询</button>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <button class="mbtn" onclick="setDay(0)">今天</button>
+    <button class="mbtn" onclick="setDay(1)">昨天</button>
+    <button class="mbtn" onclick="setRange(7)">近7天</button>
+    <button class="mbtn" onclick="setRange(30)">近30天</button>
+    <button class="mbtn" onclick="setRange(90)">近90天</button>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <button class="mbtn" onclick="dl('csv')">导出账号CSV</button>
+    <button class="mbtn" onclick="dl('xlsx')">导出账号xlsx</button>
+    <button class="mbtn" onclick="dlPhotos('csv')">导出视频CSV</button>
+    <button class="mbtn" onclick="dlPhotos('xlsx')">导出视频xlsx</button>
+  </div>
+  <span id="msg"></span>
+</div>
+</div>
+
+<main class="wrap">
+
+<div class="kpis" id="kpis"></div>
+
+<div class="filters" id="acct-filters"></div>
+
+<h2 id="sec-trend">每日趋势 <span class="ins-sub">按账号，全部日期</span></h2>
+<div class="chart"><div class="legend" id="legend"></div><div class="chart-box"><div id="chart"></div><div class="chart-guide" id="chart-guide"></div><div class="chart-tip" id="chart-tip"></div></div></div>
+
+<h2 id="sec-accounts">账号维度汇总</h2>
+<div class="toolbar"><input id="acctFilter" placeholder="筛选账号名称…"></div>
+<div class="tablebox tall"><table id="acct"><thead><tr>
+<th class="sortable" data-k="name">账号<span class="ar"></span></th>
+<th class="sortable" data-k="gmv">总GMV(全站)<span class="ar"></span></th>
+<th class="sortable" data-k="charge">总投放消耗<span class="ar"></span></th>
+<th class="sortable" data-k="roi">投产比ROI<span class="ar"></span></th>
+<th class="sortable" data-k="show">总曝光量<span class="ar"></span></th>
+<th class="sortable" data-k="videos">发布视频数<span class="ar"></span></th>
+<th class="sortable" data-k="avg_gmv">平均单个视频GMV<span class="ar"></span></th>
+<th class="sortable" data-k="ai">AI视频数<span class="ar"></span></th>
+<th class="sortable" data-k="hand">手剪视频数<span class="ar"></span></th>
+<th class="sortable" data-k="ai_gmv3">AI视频3日累计GMV<span class="ar"></span></th>
+<th class="sortable" data-k="r3">3s完播率<span class="ar"></span></th>
+</tr></thead><tbody></tbody></table></div>
+
+<h2 id="sec-plans">计划维度 <span class="ins-sub" id="planNote">按账号分组</span></h2>
+<div class="toolbar"><input id="planFilter" placeholder="筛选账号或计划名称…"></div>
+<div class="top10-grid" id="planGrid"></div>
+
+<h2 id="sec-advice">运营建议 <span class="ins-sub">基于所选日期范围的数据自动生成</span></h2>
+<div class="ins-cards" id="insConcl"></div>
+<div class="ins-cards" id="insWarn"></div>
+<div class="tablebox" style="margin-top:10px"><table id="quad"><thead><tr>
+<th>账号</th><th>建议动作</th><th>视频数</th><th>花费合计(元)</th><th>动作含义</th>
+</tr></thead><tbody></tbody></table></div>
+<div class="sub" id="quadNote" style="margin:8px 2px 0"></div>
+
+<h2 id="sec-action">重点行动名单 <span class="ins-sub" id="actNote"></span></h2>
+<div class="tablebox"><table id="actT"><thead><tr>
+<th>账号</th><th>视频名称</th><th>类型</th><th>花费(元)</th><th>全站GMV(元)</th><th>投产比ROI</th></tr></thead><tbody></tbody></table></div>
+
+<h2 id="sec-top10">各账号 Top10 视频 <span class="ins-sub">按全站GMV降序，供剪辑复刻打法</span></h2>
+<div class="top10-grid" id="top10"></div>
+
+</main>
+
+<div class="modal" id="video-modal" hidden>
+  <div class="modal-bg" onclick="closeVideo()"></div>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-label="视频预览">
+    <div class="modal-head">
+      <span id="video-title"></span>
+      <button class="mbtn" onclick="closeVideo()">关闭</button>
+    </div>
+    <video id="video-player" controls playsinline preload="metadata"></video>
+    <div class="sub" id="video-note" style="margin:8px 0 0"></div>
+  </div>
+</div>
+
+<script>
+const COLS = [
+  ["advertiser_id","账号"],["stat_date","日期"],["charge","花费(元)"],["show","曝光数"],
+  ["gmv","全站GMV"],["roi","全站ROI"],
+];
+const fmt = v => (v === null || v === undefined) ? "-" : (typeof v === "number" ? Number(v.toFixed(2)).toLocaleString() : v);
+const i = v => (v === null || v === undefined) ? "-" : Number(v).toLocaleString();
+const r2 = n => Math.round(n * 100) / 100;
+const ACTIVE_COST = 5, LOW_ROI = 1.5, EDITOR_TOP = 10;
+let state = { rows: [], plans: [], photos: [], accounts: [], prev: null, selected: new Set() };
+const chartHidden = new Set();
+
+function iso(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function initDates() {
+  const e = new Date(), s = new Date(); s.setDate(s.getDate() - 29);
+  document.getElementById("start").value = iso(s);
+  document.getElementById("end").value = iso(e);
+}
+function setRange(n) {
+  const e = new Date(), s = new Date(); s.setDate(s.getDate() - (n - 1));
+  document.getElementById("start").value = iso(s);
+  document.getElementById("end").value = iso(e);
+  loadData();
+}
+function setDay(offset) {
+  const d = new Date(); d.setDate(d.getDate() - offset);
+  const v = iso(d);
+  document.getElementById("start").value = v;
+  document.getElementById("end").value = v;
+  loadData();
+}
+async function loadData() {
+  const start = document.getElementById("start").value;
+  const end = document.getElementById("end").value;
+  document.getElementById("msg").textContent = "加载中…";
+  // 选单日时，额外拉前一日用于环比
+  const d = new Date(start + "T00:00:00"); d.setDate(d.getDate() - 1);
+  const prevDay = iso(d);
+  const [data, plans, photos, prevData, prevPhotos] = await Promise.all([
+    fetch(`/api/data?start=${start}&end=${end}`).then(r => r.json()),
+    fetch(`/api/plans?start=${start}&end=${end}`).then(r => r.json()),
+    fetch(`/api/photos?start=${start}&end=${end}`).then(r => r.json()),
+    fetch(`/api/data?start=${prevDay}&end=${prevDay}`).then(r => r.json()),
+    fetch(`/api/photos?start=${prevDay}&end=${prevDay}`).then(r => r.json()),
+  ]);
+  state.rows = data.rows; state.accounts = data.accounts;
+  state.plans = plans.rows; state.photos = photos.rows;
+  state.urlMap = {};
+  photos.rows.forEach(p => { if (p.video_url && !state.urlMap[p.photo_id]) state.urlMap[p.photo_id] = p.video_url; });
+  state.prev = { date: prevDay, rows: prevData.rows, photos: prevPhotos.rows };
+  state.selected = new Set(data.accounts.map(a => a.advertiser_id));
+  document.getElementById("range-label").textContent = `${start} ~ ${end}`;
+  renderFilters(); renderAll();
+  document.getElementById("msg").textContent = `${data.rows.length} 行`;
+}
+function acctName(id) {
+  const a = state.accounts.find(x => x.advertiser_id === id);
+  return a ? (a.name || a.subject || id) : id;
+}
+function sel(fn) { return state.selected.has(fn); }
+
+// ---- 聚合 ----
+function aggPhotos(src) {
+  const map = {};
+  (src || state.photos).filter(p => sel(p.advertiser_id)).forEach(p => {
+    const key = p.advertiser_id + "|" + p.photo_id;
+    const v = map[key] || (map[key] = { advertiser_id: p.advertiser_id, photo_id: p.photo_id, name: p.photo_name || p.photo_id, is_ai: Number(p.is_ai), charge: 0, gmv: 0, gmv3: 0, exp3: 0, r3n: 0, has3: false });
+    v.charge += Number(p.charge) || 0;
+    v.gmv += Number(p.gmv) || 0;
+    if (p.gmv3 !== null && p.gmv3 !== undefined) v.has3 = true;
+    v.gmv3 += Number(p.gmv3) || 0;
+    v.exp3 += Number(p.exposure) || 0;
+    v.r3n += Number(p.r3n) || 0;
+  });
+  return Object.values(map).map(v => ({ ...v, roi: v.charge ? v.gmv / v.charge : 0 }));
+}
+function aggAccounts(photos, rowsSrc) {
+  const map = {};
+  state.accounts.filter(a => sel(a.advertiser_id)).forEach(a => {
+    map[a.advertiser_id] = { advertiser_id: a.advertiser_id, charge: 0, gmv: 0, show: 0, videos: new Set(), ai: new Set(), aiGmv3: 0, exp3: 0, r3n: 0, has3: false };
+  });
+  (rowsSrc || state.rows).filter(r => sel(r.advertiser_id)).forEach(r => {
+    const a = map[r.advertiser_id]; if (!a) return;
+    a.charge += Number(r.charge) || 0; a.gmv += Number(r.gmv) || 0; a.show += Number(r.show) || 0;
+  });
+  photos.forEach(v => {
+    const a = map[v.advertiser_id]; if (!a) return;
+    a.videos.add(v.photo_id);
+    if (v.is_ai) { a.ai.add(v.photo_id); a.aiGmv3 += v.gmv3; }
+    if (v.has3) a.has3 = true;
+    a.exp3 += v.exp3; a.r3n += v.r3n;
+  });
+  return Object.values(map).map(a => ({
+    advertiser_id: a.advertiser_id,
+    charge: a.charge, gmv: a.gmv, show: Math.round(a.show),
+    videos: a.videos.size, ai: a.ai.size, hand: a.videos.size - a.ai.size,
+    roi: a.charge ? a.gmv / a.charge : 0,
+    avg_gmv: a.videos.size ? a.gmv / a.videos.size : 0,
+    ai_gmv3: a.has3 ? a.aiGmv3 : null,
+    r3: a.exp3 ? a.r3n / a.exp3 : null,
+    exp3: a.exp3, r3n: a.r3n,
+  }));
+}
+
+// ---- KPI + 环比 ----
+function totalsOf(accounts) {
+  const t = { gmv: 0, charge: 0, show: 0, videos: 0, ai: 0, hand: 0, aiGmv3: 0, exp3: 0, r3n: 0, has3: false };
+  accounts.forEach(a => {
+    t.gmv += a.gmv; t.charge += a.charge; t.show += a.show;
+    t.videos += a.videos; t.ai += a.ai; t.hand += a.hand;
+    if (a.ai_gmv3 !== null && a.ai_gmv3 !== undefined) { t.has3 = true; t.aiGmv3 += a.ai_gmv3; }
+    t.exp3 += a.exp3; t.r3n += a.r3n;
+  });
+  t.roi = t.charge ? t.gmv / t.charge : 0;
+  t.avg_gmv = t.videos ? t.gmv / t.videos : 0;
+  t.r3 = t.exp3 ? t.r3n / t.exp3 : null;
+  t.ai_gmv3 = t.has3 ? t.aiGmv3 : null;
+  return t;
+}
+function renderKpis(accounts, prevAccounts) {
+  const t = totalsOf(accounts);
+  const items = [
+    ["gmv", "总GMV(全站)", "¥" + Number(t.gmv.toFixed(2)).toLocaleString(), 0],
+    ["charge", "总投放消耗", "¥" + Number(t.charge.toFixed(2)).toLocaleString(), 0],
+    ["roi", "综合ROI", t.roi.toFixed(2), 1],
+    ["videos", "视频数", i(t.videos), 0],
+    ["avg_gmv", "平均单个视频GMV", fmt(t.avg_gmv), 0],
+    ["ai", "AI视频数", i(t.ai), 0],
+    ["hand", "手剪视频数", i(t.hand), 0],
+  ];
+  if (t.ai_gmv3 !== null) items.push(["ai_gmv3", "AI视频3日累计GMV", "¥" + Number(t.ai_gmv3.toFixed(2)).toLocaleString(), 0]);
+  items.push(["show", "总曝光量", i(t.show), 0]);
+  if (t.r3 !== null) items.push(["r3", "3s完播率", t.r3.toFixed(2) + "%", 0]);
+  const tone = k => (k === "roi" ? (t.roi >= 1 ? " good" : " bad") : "");
+  document.getElementById("kpis").innerHTML = items.map(([k, label, v, accent]) =>
+    `<div class="kpi${accent ? " accent" : ""}${tone(k)}" data-k="${k}"><div class="k">${label}</div><div class="v">${v}</div></div>`).join("");
+  if (!prevAccounts) return;
+  const pt = totalsOf(prevAccounts);
+  const RATIO_ABS = { roi: 1, r3: 1 };  // 比率类展示绝对差，其余展示百分比
+  items.forEach(([k]) => {
+    const card = document.querySelector(`#kpis .kpi[data-k="${k}"]`); if (!card) return;
+    const cur = t[k], prv = pt[k];
+    if (cur === null || cur === undefined || prv === null || prv === undefined) return;
+    const el = document.createElement("div");
+    if (Math.abs(cur - prv) < 1e-9) { el.className = "dt"; el.textContent = "持平 较前一日"; }
+    else if (!prv) { el.className = "dt"; el.textContent = "前一日无数据"; }
+    else {
+      el.className = "dt " + (cur > prv ? "up" : "down");
+      const arrow = cur > prv ? "▲" : "▼";
+      el.textContent = RATIO_ABS[k]
+        ? arrow + " " + Math.abs(cur - prv).toFixed(2) + " 较前一日"
+        : arrow + " " + (prv ? (Math.abs(cur - prv) / prv * 100).toFixed(1) : "0") + "% 较前一日";
+    }
+    card.appendChild(el);
+  });
+}
+
+// ---- 运营建议 ----
+function buildInsights(photos, accounts) {
+  const act = photos.filter(v => v.charge >= ACTIVE_COST);
+  const totCost = photos.reduce((s, v) => s + v.charge, 0);
+  const actShare = totCost ? act.reduce((s, v) => s + v.charge, 0) / totCost * 100 : 0;
+  const costs = act.map(v => v.charge).sort((a, b) => a - b);
+  const highCost = costs.length ? r2(costs[Math.floor(costs.length / 2)]) : 0;
+  // 帕累托
+  const byGmv = photos.slice().sort((a, b) => b.gmv - a.gmv);
+  const totGmv = photos.reduce((s, v) => s + v.gmv, 0);
+  let cum = 0, paretoN = byGmv.length;
+  for (let idx = 0; idx < byGmv.length; idx++) { cum += byGmv[idx].gmv; if (totGmv && cum / totGmv >= 0.8) { paretoN = idx + 1; break; } }
+  // 四象限
+  const quad = {};
+  accounts.forEach(a => {
+    const base = a.roi;
+    const q = { 放大: [], 加量测试: [], 缩减优化: [], 观察: [] };
+    act.filter(v => v.advertiser_id === a.advertiser_id).forEach(v => {
+      const eff = v.roi >= base, hv = v.charge >= highCost;
+      const key = eff ? (hv ? "放大" : "加量测试") : (hv ? "缩减优化" : "观察");
+      q[key].push(v);
+    });
+    Object.keys(q).forEach(k => q[k].sort((x, y) => y.charge - x.charge));
+    quad[a.advertiser_id] = { base_roi: base, groups: q };
+  });
+  const waste = act.filter(v => v.gmv === 0).sort((a, b) => b.charge - a.charge);
+  const lowRoi = act.filter(v => v.roi < LOW_ROI).sort((a, b) => b.charge - a.charge);
+  return { act, actShare, highCost, paretoN, totCost, totGmv, quad, waste, lowRoi };
+}
+function renderInsights(photos, accounts) {
+  const ins = buildInsights(photos, accounts);
+  const concl = [];
+  if (photos.length) concl.push(
+    `花费高度集中：${ins.act.length} 个视频（占 ${(ins.act.length / photos.length * 100).toFixed(1)}%）吃掉 ${ins.actShare.toFixed(1)}% 的花费；前 ${ins.paretoN} 个视频（${(ins.paretoN / photos.length * 100).toFixed(1)}%）贡献 80% 的 GMV。日常只需盯这几十个。`);
+  if (ins.waste.length) concl.push(
+    `零转化浪费：${ins.waste.length} 个视频花费≥${ACTIVE_COST} 元却 0 GMV，合计 ${ins.waste.reduce((s, v) => s + v.charge, 0).toFixed(2)} 元。优先关停。`);
+  if (ins.lowRoi.length) concl.push(
+    `低效投放：${ins.lowRoi.length} 个视频 ROI<${LOW_ROI}，合计花费 ${ins.lowRoi.reduce((s, v) => s + v.charge, 0).toFixed(2)} 元（占 ${(ins.lowRoi.reduce((s, v) => s + v.charge, 0) / ins.totCost * 100).toFixed(1)}%）。按名单逐条缩量或换素材。`);
+  document.getElementById("insConcl").innerHTML = concl.map(t => `<div class="ins-card">${t}</div>`).join("");
+  document.getElementById("insWarn").innerHTML =
+    `<div class="ins-card warn">异常排查：有效投放视频 ${ins.act.length} 个（花费≥${ACTIVE_COST} 元），占全部花费 ${ins.actShare.toFixed(1)}%；高花费线 ${ins.highCost} 元（有效视频花费中位数）。完播率数据 MAPI 接口不提供，未纳入分析。</div>`;
+  // 四象限
+  const ACT = { "放大": ["b-add", "ROI 达标且已是主力花费，可放量"], "加量测试": ["b-test", "ROI 达标但花费小，小步加预算"], "缩减优化": ["b-cut", "高花费但 ROI 不达标，优先缩量或换素材"], "观察": ["b-watch", "低花费且 ROI 不达标，暂不动"] };
+  const qb = document.querySelector("#quad tbody"); qb.innerHTML = "";
+  Object.keys(ins.quad).forEach(aid => {
+    const g = ins.quad[aid].groups;
+    Object.keys(ACT).forEach(k => {
+      const list = g[k]; if (!list.length) return;
+      const cost = list.reduce((s, v) => s + v.charge, 0);
+      qb.innerHTML += `<tr><td>${acctName(aid)}</td><td><span class="badge ${ACT[k][0]}">${k}</span></td>` +
+        `<td>${i(list.length)}</td><td>${fmt(cost)}</td><td style="text-align:left;color:#475569">${ACT[k][1]}</td></tr>`;
+    });
+  });
+  document.getElementById("quadNote").textContent =
+    "达标线＝该账号整体 ROI（" + Object.keys(ins.quad).map(a => acctName(a) + " " + ins.quad[a].base_roi.toFixed(2)).join(" / ") +
+    "）；高花费线＝" + fmt(ins.highCost) + " 元；仅统计花费≥" + ACTIVE_COST + " 元的视频。";
+  // 重点行动名单
+  document.getElementById("actNote").textContent =
+    "花费≥" + ACTIVE_COST + " 元且 ROI<" + LOW_ROI + "，按花费降序，共 " + ins.lowRoi.length + " 条 / " + fmt(ins.lowRoi.reduce((s, v) => s + v.charge, 0)) + " 元";
+  document.querySelector("#actT tbody").innerHTML = ins.lowRoi.slice(0, 20).map(v =>
+    `<tr><td>${acctName(v.advertiser_id)}</td>` +
+    `<td>${vnameCell(v)}</td>` +
+    `<td>${v.is_ai ? '<span class="badge b-add">AI</span>' : '<span style="color:#94A3B8">手剪</span>'}</td>` +
+    `<td>${fmt(v.charge)}</td><td>${fmt(v.gmv)}</td><td class="hi">${v.roi.toFixed(2)}</td></tr>`).join("");
+}
+
+// ---- Top10 ----
+function renderTop10(photos) {
+  const box = document.getElementById("top10");
+  box.innerHTML = state.accounts.filter(a => sel(a.advertiser_id)).map(a => {
+    const list = photos.filter(v => v.advertiser_id === a.advertiser_id && v.gmv > 0).sort((x, y) => y.gmv - x.gmv).slice(0, EDITOR_TOP);
+    const aiN = list.filter(v => v.is_ai).length;
+    const rows = list.map(v =>
+      `<tr><td>${vnameCell(v)}</td>` +
+      `<td>${v.is_ai ? '<span class="badge b-add">AI</span>' : '<span style="color:#94A3B8">手剪</span>'}</td>` +
+      `<td>${fmt(v.charge)}</td><td class="hi">${fmt(v.gmv)}</td>` +
+      `<td class="${v.roi >= 1 ? "hi" : "lo"}">${v.roi.toFixed(2)}</td></tr>`).join("");
+    return `<div class="top10-card"><div class="th"><span>${acctName(a.advertiser_id)}</span>` +
+      `<span style="font-weight:400">当日有GMV视频 ${list.length} 条（Top${EDITOR_TOP}，AI ${aiN} / 手剪 ${list.length - aiN}）</span></div>` +
+      `<div class="tablebox" style="border:0;border-radius:0;box-shadow:none"><table>` +
+      `<thead><tr><th>视频名称</th><th>类型</th><th>花费(元)</th><th>全站GMV</th><th>投产比ROI</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  }).join("");
+}
+
+// ---- 账号维度汇总 + 下钻 ----
+let sortK = "gmv", sortDir = -1, acctFilter = "";
+function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+// 视频名单元格：点击可预览播放（data-aid/data-pid 由全局委托处理）
+function vnameCell(v) {
+  return `<span class="vname" data-aid="${esc(v.advertiser_id)}" data-pid="${esc(v.photo_id)}" ` +
+    `title="点击预览：${esc(v.name)}">${esc(v.name)}</span>`;
+}
+function vGmv3Cell(v) { return v.has3 ? fmt(v.gmv3) : "-"; }
+function vR3Cell(v) { return v.exp3 ? (v.r3n / v.exp3).toFixed(2) + "%" : "-"; }
+function renderAccounts(photos) {
+  const accounts = aggAccounts(photos);
+  const ab = document.querySelector("#acct tbody"); ab.innerHTML = "";
+  let list = accounts.filter(a => acctName(a.advertiser_id).indexOf(acctFilter) >= 0);
+  list = list.slice().sort((x, y) => sortDir * ((typeof x[sortK] === "string") ? x[sortK].localeCompare(y[sortK], "zh") : x[sortK] - y[sortK]));
+  list.forEach(a => {
+    const tr = document.createElement("tr"); tr.className = "acct";
+    tr.innerHTML = `<td><span class="caret">▶</span>${acctName(a.advertiser_id)}</td>` +
+      `<td class="hi">${fmt(a.gmv)}</td><td>¥${fmt(a.charge)}</td>` +
+      `<td class="${a.roi >= 1 ? "hi" : "lo"}">${a.roi.toFixed(2)}</td>` +
+      `<td>${i(a.show)}</td><td>${i(a.videos)}</td><td>${fmt(a.avg_gmv)}</td>` +
+      `<td>${i(a.ai)}</td><td>${i(a.hand)}</td>` +
+      `<td>${a.ai_gmv3 === null ? "-" : fmt(a.ai_gmv3)}</td>` +
+      `<td>${a.r3 === null ? "-" : a.r3.toFixed(2) + "%"}</td>`;
+    ab.appendChild(tr);
+    const dtr = document.createElement("tr"); dtr.className = "detail"; dtr.hidden = true;
+    const td = document.createElement("td"); td.colSpan = 11;
+    const wrap = document.createElement("div"); wrap.className = "wrap";
+    const vs = photos.filter(v => v.advertiser_id === a.advertiser_id).sort((x, y) => y.gmv - x.gmv);
+    wrap.innerHTML = `<div class="tablebox"><table><thead><tr><th>视频名称</th><th>类型</th><th>花费(元)</th>` +
+      `<th>全站GMV</th><th>投产比ROI</th><th>3日累计GMV</th><th>3s完播率</th></tr></thead><tbody>` +
+      vs.map(v => `<tr><td>${vnameCell(v)}</td>` +
+        `<td>${v.is_ai ? '<span class="badge b-add">AI</span>' : '<span style="color:#94A3B8">手剪</span>'}</td>` +
+        `<td>${fmt(v.charge)}</td><td class="hi">${fmt(v.gmv)}</td>` +
+        `<td class="${v.roi >= 1 ? "hi" : "lo"}">${v.roi.toFixed(2)}</td>` +
+        `<td>${vGmv3Cell(v)}</td><td>${vR3Cell(v)}</td></tr>`).join("") +
+      `</tbody></table></div><div class="sub" style="margin:8px 0 0">${vs.length} 条视频，按全站GMV降序；点视频名可预览（小店上传素材可能无播放地址）</div>`;
+    td.appendChild(wrap); dtr.appendChild(td); ab.appendChild(dtr);
+    tr.onclick = () => { tr.classList.toggle("open"); dtr.hidden = !dtr.hidden; };
+  });
+  document.querySelectorAll("#acct th.sortable").forEach(th => {
+    th.classList.remove("asc", "desc");
+    const on = th.dataset.k === sortK;
+    if (on) th.classList.add(sortDir > 0 ? "asc" : "desc");
+    th.setAttribute("aria-sort", on ? (sortDir > 0 ? "ascending" : "descending") : "none");
+  });
+}
+
+// ---- 计划维度 ----
+function renderPlans() {
+  const rows = state.plans.filter(r => sel(r.advertiser_id));
+  const agg = {};
+  rows.forEach(r => {
+    const key = r.advertiser_id + "|" + r.campaign_id;
+    if (!agg[key]) agg[key] = { advertiser_id: r.advertiser_id, name: r.campaign_name || r.campaign_id, host: r.host, category: r.category, charge: 0, gmv: 0, ai_gmv3: 0, has3: false };
+    agg[key].charge += Number(r.charge) || 0;
+    agg[key].gmv += Number(r.gmv) || 0;
+    if (r.ai_gmv3 !== null && r.ai_gmv3 !== undefined) { agg[key].has3 = true; agg[key].ai_gmv3 += Number(r.ai_gmv3); }
+  });
+  let list = Object.values(agg).map(x => ({ ...x, roi: x.charge ? x.gmv / x.charge : 0 })).sort((a, b) => b.gmv - a.gmv);
+  const q = document.getElementById("planFilter").value.trim();
+  if (q) list = list.filter(p => (acctName(p.advertiser_id) + p.name + p.host + p.category).indexOf(q) >= 0);
+
+  // 按账号分组：每个账号一张卡片
+  const byAcc = {};
+  state.accounts.filter(a => sel(a.advertiser_id)).forEach(a => byAcc[a.advertiser_id] = []);
+  list.forEach(p => (byAcc[p.advertiser_id] = byAcc[p.advertiser_id] || []).push(p));
+
+  let shown = 0;
+  document.getElementById("planGrid").innerHTML = Object.keys(byAcc).map(aid => {
+    const ps = byAcc[aid];
+    if (!ps.length) return "";
+    shown += ps.length;
+    const rowsHtml = ps.map(r =>
+      `<tr><td style="text-align:left">${r.name}</td><td>${r.host || "-"}</td>` +
+      `<td style="text-align:left">${r.category || "-"}</td>` +
+      `<td>${fmt(r.charge)}</td><td class="hi">${fmt(r.gmv)}</td>` +
+      `<td class="${r.roi >= 1 ? "hi" : "lo"}">${r.roi.toFixed(2)}</td>` +
+      `<td>${r.has3 ? fmt(r.ai_gmv3) : "-"}</td></tr>`).join("");
+    return `<div class="top10-card"><div class="th"><span>${acctName(aid)}</span>` +
+      `<span style="font-weight:400">${ps.length} 个计划</span></div>` +
+      `<div class="tablebox" style="border:0;border-radius:0;box-shadow:none"><table>` +
+      `<thead><tr><th>计划</th><th>主播</th><th>品类</th><th>花费(元)</th><th>全站GMV</th><th>投产比ROI</th><th>AI视频3日累计GMV</th></tr></thead>` +
+      `<tbody>${rowsHtml}</tbody></table></div></div>`;
+  }).join("") || `<div class="sub">没有匹配的计划</div>`;
+  document.getElementById("planNote").textContent = "按账号分组，当前 " + i(shown) + " 个计划";
+}
+
+// ---- 每日趋势 ----
+function renderChart() {
+  const rows = state.rows.filter(r => sel(r.advertiser_id));
+  const dates = [...new Set(rows.map(r => r.stat_date))].sort();
+  const all = [...state.selected];
+  const PAL = ["#1E40AF", "#D97706", "#3B82F6", "#0891B2", "#7C3AED", "#DB2777", "#059669", "#EA580C"];
+  const cmap = {}; all.forEach((n, ix) => cmap[n] = PAL[ix % PAL.length]);
+  const names = all.filter(n => !chartHidden.has(n));
+  const series = names.map(n => dates.map(d => {
+    const r = rows.find(x => x.advertiser_id === n && x.stat_date === d);
+    return r ? (Number(r.gmv) || 0) : 0;
+  }));
+  const max = Math.max(1, ...series.flat());
+  const W = 980, H = 320, pl = 64, pr = 14, pt = 14, pb = 42;
+  const iw = W - pl - pr, ih = H - pt - pb, yMax = Math.ceil(max / 1000) * 1000 || 1;
+  const step = dates.length > 1 ? iw / (dates.length - 1) : 0;
+  const X = di => dates.length > 1 ? pl + step * di : pl + iw / 2;
+  const Y = v => pt + ih - ih * v / yMax;
+  const lstep = Math.max(1, Math.ceil(dates.length / Math.floor(iw / 34)));
+  const fmtY = v => v >= 10000 ? (v / 10000) + "万" : String(Math.round(v));
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:1020px" role="img" aria-label="按账号的每日全站GMV趋势">`;
+  s += `<defs>${names.map(n => {
+    const c = cmap[n];
+    return `<linearGradient id="g${c.slice(1)}" x1="0" y1="0" x2="0" y2="1">` +
+      `<stop offset="0%" stop-color="${c}" stop-opacity=".22"/>` +
+      `<stop offset="100%" stop-color="${c}" stop-opacity="0"/></linearGradient>`;
+  }).join("")}</defs>`;
+  for (let t = 0; t <= 4; t++) {
+    const v = yMax * t / 4, y = Y(v);
+    s += `<line x1="${pl}" y1="${y}" x2="${W - pr}" y2="${y}" stroke="${t === 0 ? "#C8D6E9" : "#E7EEF7"}"/>` +
+         `<text x="${pl - 8}" y="${y + 4}" font-size="10" fill="#586A88" text-anchor="end">${fmtY(v)}</text>`;
+  }
+  s += `<text x="14" y="${pt + 4}" font-size="10" fill="#8A9AB4">GMV(元)</text>`;
+  const single = names.length === 1;
+  names.forEach((n, ni) => {
+    const col = cmap[n];
+    const pts = series[ni].map((v, di) => X(di) + "," + Y(v)).join(" ");
+    if (single) {
+      const base = Y(0);
+      s += `<path d="M${X(0)},${base} L${pts.split(" ").join(" L")} L${X(dates.length - 1)},${base} Z" fill="url(#g${col.slice(1)})"/>`;
+    }
+    s += `<polyline fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${pts}"/>`;
+    series[ni].forEach((v, di) => {
+      s += `<circle cx="${X(di)}" cy="${Y(v)}" r="2.6" fill="${col}" pointer-events="none"/>`;
+    });
+  });
+  dates.forEach((d, di) => {
+    if (di % lstep === 0 || di === dates.length - 1) {
+      s += `<text x="${X(di)}" y="${H - 24}" font-size="10" fill="#64748B" text-anchor="end" transform="rotate(-45 ${X(di)} ${H - 24})">${d.slice(5)}</text>`;
+    }
+  });
+  document.getElementById("chart").innerHTML = s + "</svg>";
+  document.getElementById("legend").innerHTML = all.map(n => {
+    const off = chartHidden.has(n);
+    return `<button class="lchip${off ? " off" : ""}" data-n="${n.replace(/"/g, "&quot;")}"><i style="background:${cmap[n]}"></i>${acctName(n)}</button>`;
+  }).join("");
+  document.querySelectorAll("#legend .lchip").forEach(b => {
+    b.onclick = () => { const n = b.dataset.n; if (chartHidden.has(n)) chartHidden.delete(n); else chartHidden.add(n); renderChart(); };
+  });
+
+  // 鼠标悬停：显示该日期下各账号的数值与账号名
+  const svg = document.querySelector("#chart svg");
+  const box = document.querySelector(".chart-box");
+  const tip = document.getElementById("chart-tip");
+  const guide = document.getElementById("chart-guide");
+  const byDate = dates.map((d, di) => names.map((n, ni) => ({ n, v: series[ni][di] })).sort((a, b) => b.v - a.v));
+  const hide = () => { tip.style.display = "none"; guide.style.display = "none"; };
+  svg.addEventListener("mousemove", ev => {
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width || !dates.length) return;
+    const mx = (ev.clientX - rect.left) * W / rect.width;
+    let di = 0, best = Infinity;
+    for (let i = 0; i < dates.length; i++) { const dd = Math.abs(X(i) - mx); if (dd < best) { best = dd; di = i; } }
+    tip.innerHTML = `<div class="tip-date">${dates[di]}</div>` + byDate[di].map(o =>
+      `<div class="tip-row"><i style="background:${cmap[o.n]}"></i>${acctName(o.n)}<b>¥${o.v.toFixed(2)}</b></div>`).join("");
+    const boxRect = box.getBoundingClientRect();
+    tip.style.display = "block";
+    let left = ev.clientX - boxRect.left + 16;
+    if (left + tip.offsetWidth > boxRect.width) left = ev.clientX - boxRect.left - tip.offsetWidth - 16;
+    tip.style.left = Math.max(4, left) + "px";
+    tip.style.top = Math.max(4, ev.clientY - boxRect.top - tip.offsetHeight / 2) + "px";
+    const gx = rect.left - boxRect.left + (X(di) / W) * rect.width;
+    guide.style.display = "block";
+    guide.style.left = gx + "px";
+    guide.style.top = (rect.top - boxRect.top) + "px";
+    guide.style.height = rect.height + "px";
+  });
+  svg.addEventListener("mouseleave", hide);
+}
+
+// ---- 渲染入口 ----
+function prevAccountsOf() {
+  // 多日选区：用范围内倒数第二天；单日选区：用额外拉的前一日
+  const dates = [...new Set(state.rows.filter(r => sel(r.advertiser_id)).map(r => r.stat_date))].sort();
+  if (dates.length >= 2) {
+    const d = dates[dates.length - 2];
+    return { date: d, accounts: aggAccounts(aggPhotos(state.photos.filter(p => p.stat_date === d)), state.rows.filter(r => r.stat_date === d)) };
+  }
+  if (state.prev) {
+    return { date: state.prev.date, accounts: aggAccounts(aggPhotos(state.prev.photos), state.prev.rows) };
+  }
+  return null;
+}
+function renderAll() {
+  if (!state.rows.length && !state.photos.length) {
+    document.getElementById("msg").textContent = "所选日期无数据（可能尚未同步）";
+  }
+  const photos = aggPhotos();
+  const accounts = aggAccounts(photos);
+  const pc = prevAccountsOf();
+  renderKpis(accounts, pc ? pc.accounts : null);
+  renderInsights(photos, accounts);
+  renderTop10(photos);
+  renderAccounts(photos);
+  renderPlans();
+  renderChart();
+}
+function renderFilters() {
+  const el = document.getElementById("acct-filters"); el.innerHTML = "";
+  state.accounts.forEach(a => {
+    const c = document.createElement("button");
+    c.type = "button";
+    c.className = "lchip on";
+    c.textContent = acctName(a.advertiser_id);
+    c.setAttribute("aria-pressed", "true");
+    c.onclick = () => {
+      const on = !state.selected.has(a.advertiser_id);
+      if (on) state.selected.add(a.advertiser_id);
+      else state.selected.delete(a.advertiser_id);
+      c.classList.toggle("on", on);
+      c.setAttribute("aria-pressed", String(on));
+      renderAll();
+    };
+    el.appendChild(c);
+  });
+}
+document.querySelectorAll("#acct th.sortable").forEach(th => {
+  th.tabIndex = 0;
+  th.onclick = () => { const k = th.dataset.k; if (sortK === k) sortDir = -sortDir; else { sortK = k; sortDir = k === "name" ? 1 : -1; } renderAll(); };
+  th.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); th.click(); } };
+});
+document.getElementById("acctFilter").oninput = e => { acctFilter = e.target.value.trim(); renderAll(); };
+document.getElementById("planFilter").oninput = () => renderPlans();
+function dl(fmt) {
+  const start = document.getElementById("start").value;
+  const end = document.getElementById("end").value;
+  window.location = `/api/export.${fmt}?start=${start}&end=${end}`;
+}
+function dlPhotos(fmt) {
+  const start = document.getElementById("start").value;
+  const end = document.getElementById("end").value;
+  window.location = `/api/export-photos.${fmt}?start=${start}&end=${end}`;
+}
+// ---- 视频预览 ----
+const NO_URL_HINT = "该视频在快手素材库里查不到播放地址——多为「小店上传」的素材，只能在快手/罗盘后台查看。";
+async function fetchFreshUrl(aid, pid) {
+  try {
+    const r = await fetch(`/api/video-url?advertiser_id=${encodeURIComponent(aid)}&photo_id=${encodeURIComponent(pid)}`);
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.url) return d.url;
+    return { err: (d && d.detail) || NO_URL_HINT };
+  } catch (e) {
+    return { err: NO_URL_HINT };
+  }
+}
+function showVideo(url, errText) {
+  const v = document.getElementById("video-player");
+  const note = document.getElementById("video-note");
+  if (url) { v.src = url; v.play().catch(() => {}); note.textContent = ""; }
+  else { note.textContent = errText || NO_URL_HINT; }
+}
+async function openVideo(aid, pid, name) {
+  document.getElementById("video-title").textContent = name || pid;
+  const note = document.getElementById("video-note");
+  const v = document.getElementById("video-player");
+  v.onerror = null;
+  v.pause(); v.removeAttribute("src"); v.load();
+  document.getElementById("video-modal").hidden = false;
+  const stored = (state.urlMap || {})[pid];
+  if (stored) {
+    note.textContent = "";
+    showVideo(stored);
+    // 存储地址可能过期：加载失败时再向接口要一次新的
+    v.onerror = async () => {
+      note.textContent = "链接可能已过期，正在重新获取…";
+      const u = await fetchFreshUrl(aid, pid);
+      showVideo(typeof u === "string" ? u : null, typeof u === "string" ? "" : u.err);
+    };
+  } else {
+    note.textContent = "正在获取播放地址…";
+    const u = await fetchFreshUrl(aid, pid);
+    showVideo(typeof u === "string" ? u : null, typeof u === "string" ? "" : u.err);
+  }
+}
+function closeVideo() {
+  const v = document.getElementById("video-player");
+  v.pause(); v.removeAttribute("src"); v.load();
+  document.getElementById("video-modal").hidden = true;
+}
+document.addEventListener("click", e => {
+  const el = e.target.closest(".vname[data-pid]");
+  if (el) openVideo(el.dataset.aid, el.dataset.pid, el.textContent);
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeVideo(); });
+initDates(); loadData();
+</script>
+</body>
+</html>

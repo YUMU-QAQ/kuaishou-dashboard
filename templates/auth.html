@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>授权管理</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Microsoft YaHei", sans-serif; margin: 0; background: #f5f6f8; color: #222; }
+  header { background: #fff; border-bottom: 1px solid #e5e6e8; padding: 14px 24px; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header a { margin-left: auto; color: #4a6cf7; text-decoration: none; font-size: 14px; }
+  .wrap { padding: 20px 24px; max-width: 900px; }
+  .tip { background: #fff7e6; border: 1px solid #ffe0a3; color: #8a6d3b; border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; }
+  .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
+  th { color: #666; background: #fafafa; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .ok { background: #2bb673; }
+  .broken { background: #f76a4a; }
+  .pending { background: #ccc; }
+  .btn { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .btn.primary { background: #4a6cf7; color: #fff; }
+  .btn.ghost { background: #fff; color: #333; border: 1px solid #ccc; }
+  input[type=text] { padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; width: 100%; }
+</style>
+</head>
+<body>
+<header>
+  <h1>授权管理</h1>
+  <a href="/">返回看板</a>
+</header>
+
+<div class="wrap">
+  <div class="tip">每个快手账号需单独授权。① 自己在本机操作：点「本机直接授权」，当前浏览器登录谁的快手账号就授权谁。② 授权给别家店铺：点「复制授权链接」，把链接发给对方，对方在自己浏览器登录店铺的快手账号后点同意。授权成功后状态变绿。</div>
+
+  <div class="card">
+    <table>
+      <thead><tr><th>账号ID</th><th>名称</th><th>主体</th><th>状态</th><th>最后同步</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div id="linkbox" style="display:none; margin-bottom:12px;">
+      <div style="font-size:13px;color:#555;margin-bottom:6px;">把下面这条链接发给该店铺持有人，对方在自己浏览器登录店铺的快手账号后点同意：</div>
+      <textarea id="linktext" readonly style="width:100%;height:70px;padding:8px;border:1px solid #ccc;border-radius:6px;font-size:12px;font-family:monospace;resize:vertical;"></textarea>
+      <div style="font-size:12px;color:#999;margin-top:6px;">链接一次性，发出后请对方尽快授权；重新生成后旧链接失效。</div>
+    </div>
+    <div style="display:flex; justify-content:flex-end; gap:8px;">
+      <button class="btn ghost" onclick="copyLink()">复制授权链接</button>
+      <button class="btn primary" onclick="authorize()">本机直接授权</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STATUS = { ok: ["ok","正常"], broken: ["broken","断链"], pending: ["pending","未授权"] };
+function fmtTime(ts) { return ts ? new Date(ts * 1000).toLocaleString("zh-CN") : "-"; }
+async function load() {
+  const r = await fetch("/api/accounts");
+  const accounts = await r.json();
+  const el = document.getElementById("rows");
+  if (!accounts.length) {
+    el.innerHTML = `<tr><td colspan="6" style="color:#999;text-align:center;padding:30px;">还没有账号，点下方「复制授权链接」或「本机直接授权」接入第一个账号</td></tr>`;
+    return;
+  }
+  el.innerHTML = accounts.map(a => {
+    const [cls, label] = STATUS[a.token_status] || STATUS.pending;
+    return `<tr>
+      <td>${a.advertiser_id}</td>
+      <td><input type="text" value="${a.name || ""}" onchange="save('${a.advertiser_id}', 'name', this.value)" placeholder="账号名"></td>
+      <td><input type="text" value="${a.subject || ""}" onchange="save('${a.advertiser_id}', 'subject', this.value)" placeholder="所属主体"></td>
+      <td><span class="dot ${cls}"></span>${label}</td>
+      <td>${fmtTime(a.last_sync_at)}</td>
+      <td>${a.token_status !== "ok" ? `<button class="btn ghost" onclick="authorize()">重新授权</button>` : ""} <button class="btn ghost" onclick="remove('${a.advertiser_id}')">删除</button></td>
+    </tr>`;
+  }).join("");
+}
+async function save(id, field, value) {
+  const body = {}; body[field] = value;
+  await fetch(`/api/accounts/${id}`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) });
+}
+async function remove(id) {
+  if (!confirm(`确认删除账号 ${id} 及其全部数据？`)) return;
+  await fetch(`/api/accounts/${id}`, { method: "DELETE" });
+  load();
+}
+function authorize() { window.location = "/oauth/start"; }
+async function copyLink() {
+  const r = await fetch("/api/authorize-url");
+  const { url } = await r.json();
+  document.getElementById("linkbox").style.display = "";
+  const ta = document.getElementById("linktext");
+  ta.value = url;
+  ta.focus(); ta.select();
+  try { await navigator.clipboard.writeText(url); } catch (e) { document.execCommand("copy"); }
+  alert("授权链接已复制，发给店铺持有人即可。");
+}
+load();
+</script>
+</body>
+</html>
