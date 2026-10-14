@@ -38,6 +38,26 @@ def main():
     if "前一日无数据" not in html:
         problems.append("KPI 缺少「前一日无数据」分支")
 
+    # 6) 视频可播图标：按 state.urlMap（服务端去重后的 photo_id -> 地址）判断，不能靠每行塞 URL
+    if "(state.urlMap || {})[v.photo_id]" not in html:
+        problems.append("vnameCell 没有按 state.urlMap 显示可播图标")
+    if "state.urlMap = photos.urls" not in html:
+        problems.append("urlMap 没有取服务端去重后的 photos.urls")
+    if "video_url" in html:
+        problems.append("行数据里还在用 video_url（应已改为服务端去重的 urls）")
+
+    # 7) 多日范围时 AI视频GMV 必须换成「每日GMV相加」，不能继续用3日累计（会重复计）
+    if "state.multiDay" not in html:
+        problems.append("缺少 state.multiDay 判断")
+    if 'state.multiDay ? fmt(v.gmv) : (v.has3 ? fmt(v.gmv3)' not in html:
+        problems.append("视频维度没有按范围切换 3日累计GMV / 视频GMV")
+    if "state.multiDay ? a.aiGmv : (a.has3 ? a.aiGmv3 : null)" not in html:
+        problems.append("账号维度没有按范围切换 AI视频GMV / AI视频3日累计GMV")
+
+    # 8) 多日范围不该显示环比（跟前一日比跨度不同，没有意义）
+    if "if (!prevAccounts || state.multiDay) return;" not in html:
+        problems.append("多日范围的 KPI 环比没有被关掉")
+
     if problems:
         raise SystemExit("dashboard.html 检查失败:\n  - " + "\n  - ".join(problems))
     print(f"dashboard.html OK（{len(ids)} 个 id，{len(refs)} 个 JS id 引用）")

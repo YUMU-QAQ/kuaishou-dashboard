@@ -133,6 +133,18 @@ box-shadow:0 6px 18px rgba(30,58,138,.14);font-size:12px}
 .chart-guide{position:absolute;display:none;width:1px;background:#C8D6E9;pointer-events:none;z-index:5}
 .vname[data-pid]{cursor:pointer;border-bottom:1px dashed #A5B7D4}
 .vname[data-pid]:hover{color:var(--primary);border-bottom-color:var(--primary)}
+.vicon{display:inline-block;width:15px;height:15px;line-height:13px;text-align:center;border-radius:50%;
+  font-size:10px;margin-right:5px;vertical-align:middle;cursor:pointer;flex:none;}
+.vicon.has{background:#e6f7ee;color:#12a05c;border:1px solid #b7e4cd}
+.vicon.none{background:#f1f2f4;color:#a0a4ab;border:1px solid #dfe1e5}
+.gchip{padding:4px 10px;margin:2px 4px 2px 0;border:1px solid var(--border);border-radius:999px;
+  background:#fff;color:#64748b;font-size:12px;cursor:pointer;font-family:inherit;}
+.gchip:hover{border-color:var(--primary);color:var(--primary)}
+.gchip.on{background:#eef2ff;border-color:#c7d2fe;color:#3b52c9;font-weight:600}
+.gm-item{display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid #f1f2f4;font-size:13px;cursor:pointer}
+.gm-item:last-child{border-bottom:0}
+.gm-item input{width:15px;height:15px;flex:none;cursor:pointer}
+.gm-id{color:#94a3b8;font-size:11px;margin-left:auto}
 .modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center}
 .modal[hidden]{display:none}
 .modal-bg{position:absolute;inset:0;background:rgba(15,23,42,.55)}
@@ -197,6 +209,7 @@ align-items:center;gap:10px}
   <nav class="jump">
     <a href="#sec-trend">趋势</a>
     <a href="#sec-accounts">账号</a>
+    <a href="#sec-groups">分组</a>
     <a href="#sec-plans">计划</a>
     <a href="#sec-advice">建议</a>
     <a href="#sec-action">行动</a>
@@ -213,11 +226,14 @@ align-items:center;gap:10px}
   </div>
   <span class="sep"></span>
   <div class="grp">
-    <button class="mbtn" onclick="setDay(0)">今天</button>
     <button class="mbtn" onclick="setDay(1)">昨天</button>
     <button class="mbtn" onclick="setRange(7)">近7天</button>
     <button class="mbtn" onclick="setRange(30)">近30天</button>
     <button class="mbtn" onclick="setRange(90)">近90天</button>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <button class="mbtn" id="syncbtn" onclick="triggerSync()">拉取最新数据</button>
   </div>
   <span class="sep"></span>
   <div class="grp">
@@ -251,9 +267,40 @@ align-items:center;gap:10px}
 <th class="sortable" data-k="avg_gmv">平均单个视频GMV<span class="ar"></span></th>
 <th class="sortable" data-k="ai">AI视频数<span class="ar"></span></th>
 <th class="sortable" data-k="hand">手剪视频数<span class="ar"></span></th>
-<th class="sortable" data-k="ai_gmv3">AI视频3日累计GMV<span class="ar"></span></th>
-<th class="sortable" data-k="r3">3s完播率<span class="ar"></span></th>
+<th class="sortable" data-k="ai_gmv"><span id="thAiGmvLabel">AI视频3日累计GMV</span><span class="ar"></span></th>
+<th class="sortable" data-k="r3">3秒播放率<span class="ar"></span></th>
+<th class="sortable" data-k="rend">完播率<span class="ar"></span></th>
 </tr></thead><tbody></tbody></table></div>
+
+<h2 id="sec-groups">分组看板 <span class="ins-sub">自定义分组，把要一起看的店铺归到一组</span></h2>
+<div class="toolbar">
+  <button class="mbtn primary" onclick="openGroupModal()">新建分组</button>
+  <span class="ins-sub">点某行的「编辑」可改名或增减店铺</span>
+</div>
+<div class="tablebox"><table id="groupT"><thead><tr>
+<th>分组</th><th>店铺</th><th>GMV</th><th>曝光</th>
+<th>单个视频GMV</th><th>3秒播放率</th><th>完播率</th><th></th>
+</tr></thead><tbody></tbody></table></div>
+<div class="sub" id="groupNote" style="margin:8px 2px 0"></div>
+
+<div class="modal" id="group-modal" hidden>
+  <div class="modal-bg" onclick="closeGroupModal()"></div>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-label="分组设置" style="width:min(520px,92vw)">
+    <div class="modal-head">
+      <span id="group-modal-title">新建分组</span>
+      <button class="mbtn" onclick="closeGroupModal()">取消</button>
+    </div>
+    <label for="gm-name" style="font-size:12px;color:#64748b">分组名称</label>
+    <input id="gm-name" type="text" placeholder="如：阿胶品类"
+      style="width:100%;margin:4px 0 12px;padding:7px 11px;border:1px solid var(--border);border-radius:var(--radius-sm)">
+    <div style="font-size:12px;color:#64748b;margin-bottom:6px;">勾选要放进这个分组的店铺</div>
+    <div id="gm-list" style="max-height:44vh;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 12px;"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
+      <button class="mbtn" onclick="closeGroupModal()">取消</button>
+      <button class="mbtn primary" onclick="saveGroup()">保存</button>
+    </div>
+  </div>
+</div>
 
 <h2 id="sec-plans">计划维度 <span class="ins-sub" id="planNote">按账号分组</span></h2>
 <div class="toolbar"><input id="planFilter" placeholder="筛选账号或计划名称…"></div>
@@ -268,6 +315,7 @@ align-items:center;gap:10px}
 <div class="sub" id="quadNote" style="margin:8px 2px 0"></div>
 
 <h2 id="sec-action">重点行动名单 <span class="ins-sub" id="actNote"></span></h2>
+<div class="sub" style="margin:6px 2px 0">视频名前的图标：<span class="vicon has">▶</span> 有播放地址，点击可看；<span class="vicon none">?</span> 暂无播放地址（多为「小店上传」的视频），点击会再试一次获取。</div>
 <div class="tablebox"><table id="actT"><thead><tr>
 <th>账号</th><th>视频名称</th><th>类型</th><th>花费(元)</th><th>全站GMV(元)</th><th>投产比ROI</th></tr></thead><tbody></tbody></table></div>
 
@@ -335,12 +383,14 @@ async function loadData() {
   ]);
   state.rows = data.rows; state.accounts = data.accounts;
   state.plans = plans.rows; state.photos = photos.rows;
-  state.urlMap = {};
-  photos.rows.forEach(p => { if (p.video_url && !state.urlMap[p.photo_id]) state.urlMap[p.photo_id] = p.video_url; });
+  state.urlMap = photos.urls || {};  // photo_id -> 播放地址（服务端已按视频去重）
   state.prev = { date: prevDay, rows: prevData.rows, photos: prevPhotos.rows };
   state.selected = new Set(data.accounts.map(a => a.advertiser_id));
+  state.start = start; state.end = end;
+  // 多日范围：AI视频用「区间内每日GMV相加」，不能用3日累计（会重复计三天）
+  state.multiDay = start !== end;
   document.getElementById("range-label").textContent = `${start} ~ ${end}`;
-  renderFilters(); renderAll();
+  renderFilters(); renderAll(); loadGroups();
   document.getElementById("msg").textContent = `${data.rows.length} 行`;
 }
 function acctName(id) {
@@ -354,31 +404,40 @@ function aggPhotos(src) {
   const map = {};
   (src || state.photos).filter(p => sel(p.advertiser_id)).forEach(p => {
     const key = p.advertiser_id + "|" + p.photo_id;
-    const v = map[key] || (map[key] = { advertiser_id: p.advertiser_id, photo_id: p.photo_id, name: p.photo_name || p.photo_id, is_ai: Number(p.is_ai), charge: 0, gmv: 0, gmv3: 0, exp3: 0, r3n: 0, has3: false });
+    const v = map[key] || (map[key] = { advertiser_id: p.advertiser_id, photo_id: p.photo_id, name: p.photo_name || p.photo_id, campaign_id: p.campaign_id || null, is_ai: Number(p.is_ai), aiGmv: 0, charge: 0, gmv: 0, gmv3: 0, exp3: 0, r3n: 0, rend: 0, has3: false });
+    if (!v.campaign_id && p.campaign_id) v.campaign_id = p.campaign_id;
+    if (v.is_ai) v.aiGmv += Number(p.gmv) || 0;  // AI视频按天GMV合计（区别于3日累计）
     v.charge += Number(p.charge) || 0;
     v.gmv += Number(p.gmv) || 0;
     if (p.gmv3 !== null && p.gmv3 !== undefined) v.has3 = true;
     v.gmv3 += Number(p.gmv3) || 0;
     v.exp3 += Number(p.exposure) || 0;
     v.r3n += Number(p.r3n) || 0;
+    v.rend += Number(p.rend) || 0;
   });
   return Object.values(map).map(v => ({ ...v, roi: v.charge ? v.gmv / v.charge : 0 }));
 }
 function aggAccounts(photos, rowsSrc) {
   const map = {};
   state.accounts.filter(a => sel(a.advertiser_id)).forEach(a => {
-    map[a.advertiser_id] = { advertiser_id: a.advertiser_id, charge: 0, gmv: 0, show: 0, videos: new Set(), ai: new Set(), aiGmv3: 0, exp3: 0, r3n: 0, has3: false };
+    map[a.advertiser_id] = { advertiser_id: a.advertiser_id, charge: 0, gmv: 0, show: 0, videos: new Set(), ai: new Set(), aiGmv: 0, aiGmv3: 0, playedNum: 0, played3s: 0, playedEnd: 0, hasPlay: false, has3: false };
   });
   (rowsSrc || state.rows).filter(r => sel(r.advertiser_id)).forEach(r => {
     const a = map[r.advertiser_id]; if (!a) return;
     a.charge += Number(r.charge) || 0; a.gmv += Number(r.gmv) || 0; a.show += Number(r.show) || 0;
+    // 3秒播放率/完播率：接口给的是分子分母（daily 表），区间内加总后再除，不能平均比率
+    if (r.played_num) {
+      a.playedNum += Number(r.played_num) || 0;
+      a.played3s += Number(r.played_3s) || 0;
+      a.playedEnd += Number(r.played_end) || 0;
+      a.hasPlay = true;
+    }
   });
   photos.forEach(v => {
     const a = map[v.advertiser_id]; if (!a) return;
     a.videos.add(v.photo_id);
-    if (v.is_ai) { a.ai.add(v.photo_id); a.aiGmv3 += v.gmv3; }
+    if (v.is_ai) { a.ai.add(v.photo_id); a.aiGmv3 += v.gmv3; a.aiGmv += v.aiGmv; }
     if (v.has3) a.has3 = true;
-    a.exp3 += v.exp3; a.r3n += v.r3n;
   });
   return Object.values(map).map(a => ({
     advertiser_id: a.advertiser_id,
@@ -386,25 +445,31 @@ function aggAccounts(photos, rowsSrc) {
     videos: a.videos.size, ai: a.ai.size, hand: a.videos.size - a.ai.size,
     roi: a.charge ? a.gmv / a.charge : 0,
     avg_gmv: a.videos.size ? a.gmv / a.videos.size : 0,
-    ai_gmv3: a.has3 ? a.aiGmv3 : null,
-    r3: a.exp3 ? a.r3n / a.exp3 : null,
-    exp3: a.exp3, r3n: a.r3n,
+    // 单日看3日累计GMV（罗盘口径）；多日范围改成区间内每日GMV相加，否则3日窗口会重复计
+    ai_gmv: state.multiDay ? a.aiGmv : (a.has3 ? a.aiGmv3 : null),
+    // 播放率分母是行为数(played_num)，与罗盘的「曝光数」口径不同
+    playedNum: a.playedNum, played3s: a.played3s, playedEnd: a.playedEnd,
+    r3: (a.hasPlay && a.playedNum) ? a.played3s / a.playedNum * 100 : null,
+    rend: (a.hasPlay && a.playedNum) ? a.playedEnd / a.playedNum * 100 : null,
   }));
 }
 
 // ---- KPI + 环比 ----
 function totalsOf(accounts) {
-  const t = { gmv: 0, charge: 0, show: 0, videos: 0, ai: 0, hand: 0, aiGmv3: 0, exp3: 0, r3n: 0, has3: false };
+  const t = { gmv: 0, charge: 0, show: 0, videos: 0, ai: 0, hand: 0, aiGmv: 0, playedNum: 0, played3s: 0, playedEnd: 0, hasPlay: false, has3: false };
   accounts.forEach(a => {
     t.gmv += a.gmv; t.charge += a.charge; t.show += a.show;
     t.videos += a.videos; t.ai += a.ai; t.hand += a.hand;
-    if (a.ai_gmv3 !== null && a.ai_gmv3 !== undefined) { t.has3 = true; t.aiGmv3 += a.ai_gmv3; }
-    t.exp3 += a.exp3; t.r3n += a.r3n;
+    if (a.ai_gmv !== null && a.ai_gmv !== undefined) { t.has3 = true; t.aiGmv += a.ai_gmv; }
+    if (a.r3 !== null) {
+      t.hasPlay = true; t.playedNum += a.playedNum; t.played3s += a.played3s; t.playedEnd += a.playedEnd;
+    }
   });
   t.roi = t.charge ? t.gmv / t.charge : 0;
   t.avg_gmv = t.videos ? t.gmv / t.videos : 0;
-  t.r3 = t.exp3 ? t.r3n / t.exp3 : null;
-  t.ai_gmv3 = t.has3 ? t.aiGmv3 : null;
+  t.r3 = (t.hasPlay && t.playedNum) ? t.played3s / t.playedNum * 100 : null;
+  t.rend = (t.hasPlay && t.playedNum) ? t.playedEnd / t.playedNum * 100 : null;
+  t.ai_gmv = t.has3 ? t.aiGmv : null;
   return t;
 }
 function renderKpis(accounts, prevAccounts) {
@@ -418,15 +483,18 @@ function renderKpis(accounts, prevAccounts) {
     ["ai", "AI视频数", i(t.ai), 0],
     ["hand", "手剪视频数", i(t.hand), 0],
   ];
-  if (t.ai_gmv3 !== null) items.push(["ai_gmv3", "AI视频3日累计GMV", "¥" + Number(t.ai_gmv3.toFixed(2)).toLocaleString(), 0]);
+  const aiLabel = state.multiDay ? "AI视频GMV" : "AI视频3日累计GMV";
+  if (t.ai_gmv !== null) items.push(["ai_gmv", aiLabel, "¥" + Number(t.ai_gmv.toFixed(2)).toLocaleString(), 0]);
   items.push(["show", "总曝光量", i(t.show), 0]);
-  if (t.r3 !== null) items.push(["r3", "3s完播率", t.r3.toFixed(2) + "%", 0]);
+  if (t.r3 !== null) items.push(["r3", "3秒播放率", t.r3.toFixed(2) + "%", 0]);
+  if (t.rend !== null) items.push(["rend", "完播率", t.rend.toFixed(2) + "%", 0]);
   const tone = k => (k === "roi" ? (t.roi >= 1 ? " good" : " bad") : "");
   document.getElementById("kpis").innerHTML = items.map(([k, label, v, accent]) =>
     `<div class="kpi${accent ? " accent" : ""}${tone(k)}" data-k="${k}"><div class="k">${label}</div><div class="v">${v}</div></div>`).join("");
-  if (!prevAccounts) return;
+  // 多日范围不显示环比：跟前一日比没有意义（跨度不同）
+  if (!prevAccounts || state.multiDay) return;
   const pt = totalsOf(prevAccounts);
-  const RATIO_ABS = { roi: 1, r3: 1 };  // 比率类展示绝对差，其余展示百分比
+  const RATIO_ABS = { roi: 1, r3: 1, rend: 1 };  // 比率类展示绝对差，其余展示百分比
   items.forEach(([k]) => {
     const card = document.querySelector(`#kpis .kpi[data-k="${k}"]`); if (!card) return;
     const cur = t[k], prv = pt[k];
@@ -485,7 +553,7 @@ function renderInsights(photos, accounts) {
     `低效投放：${ins.lowRoi.length} 个视频 ROI<${LOW_ROI}，合计花费 ${ins.lowRoi.reduce((s, v) => s + v.charge, 0).toFixed(2)} 元（占 ${(ins.lowRoi.reduce((s, v) => s + v.charge, 0) / ins.totCost * 100).toFixed(1)}%）。按名单逐条缩量或换素材。`);
   document.getElementById("insConcl").innerHTML = concl.map(t => `<div class="ins-card">${t}</div>`).join("");
   document.getElementById("insWarn").innerHTML =
-    `<div class="ins-card warn">异常排查：有效投放视频 ${ins.act.length} 个（花费≥${ACTIVE_COST} 元），占全部花费 ${ins.actShare.toFixed(1)}%；高花费线 ${ins.highCost} 元（有效视频花费中位数）。完播率数据 MAPI 接口不提供，未纳入分析。</div>`;
+    `<div class="ins-card warn">异常排查：有效投放视频 ${ins.act.length} 个（花费≥${ACTIVE_COST} 元），占全部花费 ${ins.actShare.toFixed(1)}%；高花费线 ${ins.highCost} 元（有效视频花费中位数）。3秒播放率/完播率接口只给账号维度（分母是行为数，与罗盘口径不同），未纳入视频级分析。</div>`;
   // 四象限
   const ACT = { "放大": ["b-add", "ROI 达标且已是主力花费，可放量"], "加量测试": ["b-test", "ROI 达标但花费小，小步加预算"], "缩减优化": ["b-cut", "高花费但 ROI 不达标，优先缩量或换素材"], "观察": ["b-watch", "低花费且 ROI 不达标，暂不动"] };
   const qb = document.querySelector("#quad tbody"); qb.innerHTML = "";
@@ -533,11 +601,15 @@ function renderTop10(photos) {
 let sortK = "gmv", sortDir = -1, acctFilter = "";
 function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
 // 视频名单元格：点击可预览播放（data-aid/data-pid 由全局委托处理）
+// 前面的图标标示这个视频有没有播放地址，免得点开才发现看不了
 function vnameCell(v) {
-  return `<span class="vname" data-aid="${esc(v.advertiser_id)}" data-pid="${esc(v.photo_id)}" ` +
-    `title="点击预览：${esc(v.name)}">${esc(v.name)}</span>`;
+  const ok = !!(state.urlMap || {})[v.photo_id];
+  const tip = ok ? "有播放地址，点击预览" : "暂无播放地址（小店上传的视频常常没有），点击可再试一次获取";
+  const attrs = `data-aid="${esc(v.advertiser_id)}" data-pid="${esc(v.photo_id)}" data-name="${esc(v.name)}" title="${tip}"`;
+  return `<span class="vicon ${ok ? "has" : "none"}" ${attrs}>${ok ? "▶" : "?"}</span>` +
+    `<span class="vname" ${attrs}>${esc(v.name)}</span>`;
 }
-function vGmv3Cell(v) { return v.has3 ? fmt(v.gmv3) : "-"; }
+function vGmv3Cell(v) { return state.multiDay ? fmt(v.gmv) : (v.has3 ? fmt(v.gmv3) : "-"); }
 function vR3Cell(v) { return v.exp3 ? (v.r3n / v.exp3).toFixed(2) + "%" : "-"; }
 function renderAccounts(photos) {
   const accounts = aggAccounts(photos);
@@ -551,15 +623,16 @@ function renderAccounts(photos) {
       `<td class="${a.roi >= 1 ? "hi" : "lo"}">${a.roi.toFixed(2)}</td>` +
       `<td>${i(a.show)}</td><td>${i(a.videos)}</td><td>${fmt(a.avg_gmv)}</td>` +
       `<td>${i(a.ai)}</td><td>${i(a.hand)}</td>` +
-      `<td>${a.ai_gmv3 === null ? "-" : fmt(a.ai_gmv3)}</td>` +
-      `<td>${a.r3 === null ? "-" : a.r3.toFixed(2) + "%"}</td>`;
+      `<td>${a.ai_gmv === null ? "-" : fmt(a.ai_gmv)}</td>` +
+      `<td>${a.r3 === null ? "-" : a.r3.toFixed(2) + "%"}</td>` +
+      `<td>${a.rend === null ? "-" : a.rend.toFixed(2) + "%"}</td>`;
     ab.appendChild(tr);
     const dtr = document.createElement("tr"); dtr.className = "detail"; dtr.hidden = true;
-    const td = document.createElement("td"); td.colSpan = 11;
+    const td = document.createElement("td"); td.colSpan = 12;
     const wrap = document.createElement("div"); wrap.className = "wrap";
     const vs = photos.filter(v => v.advertiser_id === a.advertiser_id).sort((x, y) => y.gmv - x.gmv);
     wrap.innerHTML = `<div class="tablebox"><table><thead><tr><th>视频名称</th><th>类型</th><th>花费(元)</th>` +
-      `<th>全站GMV</th><th>投产比ROI</th><th>3日累计GMV</th><th>3s完播率</th></tr></thead><tbody>` +
+      `<th>全站GMV</th><th>投产比ROI</th><th>${state.multiDay ? "视频GMV" : "3日累计GMV"}</th><th>3秒播放率</th></tr></thead><tbody>` +
       vs.map(v => `<tr><td>${vnameCell(v)}</td>` +
         `<td>${v.is_ai ? '<span class="badge b-add">AI</span>' : '<span style="color:#94A3B8">手剪</span>'}</td>` +
         `<td>${fmt(v.charge)}</td><td class="hi">${fmt(v.gmv)}</td>` +
@@ -580,13 +653,23 @@ function renderAccounts(photos) {
 // ---- 计划维度 ----
 function renderPlans() {
   const rows = state.plans.filter(r => sel(r.advertiser_id));
+  // AI视频GMV：按视频汇总到计划。daily_photo 带 campaign_id；单日取罗盘3日累计，多日取每日GMV相加（避免3日窗口重复计）
+  const ai = {};
+  state.photos.filter(p => sel(p.advertiser_id) && Number(p.is_ai) && p.campaign_id).forEach(p => {
+    const k = p.advertiser_id + "|" + p.campaign_id;
+    const a = ai[k] || (ai[k] = { gmv: 0, gmv3: 0, has3: false });
+    a.gmv += Number(p.gmv) || 0;
+    if (p.gmv3 !== null && p.gmv3 !== undefined) { a.has3 = true; a.gmv3 += Number(p.gmv3) || 0; }
+  });
   const agg = {};
   rows.forEach(r => {
     const key = r.advertiser_id + "|" + r.campaign_id;
-    if (!agg[key]) agg[key] = { advertiser_id: r.advertiser_id, name: r.campaign_name || r.campaign_id, host: r.host, category: r.category, charge: 0, gmv: 0, ai_gmv3: 0, has3: false };
+    if (!agg[key]) agg[key] = { advertiser_id: r.advertiser_id, name: r.campaign_name || r.campaign_id, host: r.host, category: r.category, charge: 0, gmv: 0, ai_gmv: null };
     agg[key].charge += Number(r.charge) || 0;
     agg[key].gmv += Number(r.gmv) || 0;
-    if (r.ai_gmv3 !== null && r.ai_gmv3 !== undefined) { agg[key].has3 = true; agg[key].ai_gmv3 += Number(r.ai_gmv3); }
+  });
+  Object.entries(ai).forEach(([k, a]) => {
+    if (agg[k]) agg[k].ai_gmv = state.multiDay ? a.gmv : (a.has3 ? a.gmv3 : null);
   });
   let list = Object.values(agg).map(x => ({ ...x, roi: x.charge ? x.gmv / x.charge : 0 })).sort((a, b) => b.gmv - a.gmv);
   const q = document.getElementById("planFilter").value.trim();
@@ -607,11 +690,11 @@ function renderPlans() {
       `<td style="text-align:left">${r.category || "-"}</td>` +
       `<td>${fmt(r.charge)}</td><td class="hi">${fmt(r.gmv)}</td>` +
       `<td class="${r.roi >= 1 ? "hi" : "lo"}">${r.roi.toFixed(2)}</td>` +
-      `<td>${r.has3 ? fmt(r.ai_gmv3) : "-"}</td></tr>`).join("");
+      `<td>${r.ai_gmv === null || r.ai_gmv === undefined ? "-" : fmt(r.ai_gmv)}</td></tr>`).join("");
     return `<div class="top10-card"><div class="th"><span>${acctName(aid)}</span>` +
       `<span style="font-weight:400">${ps.length} 个计划</span></div>` +
       `<div class="tablebox" style="border:0;border-radius:0;box-shadow:none"><table>` +
-      `<thead><tr><th>计划</th><th>主播</th><th>品类</th><th>花费(元)</th><th>全站GMV</th><th>投产比ROI</th><th>AI视频3日累计GMV</th></tr></thead>` +
+      `<thead><tr><th>计划</th><th>主播</th><th>品类</th><th>花费(元)</th><th>全站GMV</th><th>投产比ROI</th><th>${state.multiDay ? "AI视频GMV" : "AI视频3日累计GMV"}</th></tr></thead>` +
       `<tbody>${rowsHtml}</tbody></table></div></div>`;
   }).join("") || `<div class="sub">没有匹配的计划</div>`;
   document.getElementById("planNote").textContent = "按账号分组，当前 " + i(shown) + " 个计划";
@@ -724,6 +807,7 @@ function renderAll() {
   if (!state.rows.length && !state.photos.length) {
     document.getElementById("msg").textContent = "所选日期无数据（可能尚未同步）";
   }
+  document.getElementById("thAiGmvLabel").textContent = state.multiDay ? "AI视频GMV" : "AI视频3日累计GMV";
   const photos = aggPhotos();
   const accounts = aggAccounts(photos);
   const pc = prevAccountsOf();
@@ -817,10 +901,123 @@ function closeVideo() {
   document.getElementById("video-modal").hidden = true;
 }
 document.addEventListener("click", e => {
-  const el = e.target.closest(".vname[data-pid]");
-  if (el) openVideo(el.dataset.aid, el.dataset.pid, el.textContent);
+  const el = e.target.closest("[data-pid]");
+  if (el) openVideo(el.dataset.aid, el.dataset.pid, el.dataset.name || "");
 });
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeVideo(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closeVideo(); closeGroupModal(); } });
+
+// 手动拉取：触发服务端同步（约一分钟），轮询状态，完成后重载数据
+async function triggerSync() {
+  const btn = document.getElementById("syncbtn"), msg = document.getElementById("msg");
+  btn.disabled = true;
+  msg.textContent = "正在拉取…";
+  const r = await fetch("/api/sync", { method: "POST" });
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    msg.textContent = j.detail || "触发失败";
+    btn.disabled = false;
+    return;
+  }
+  pollSync();
+}
+async function pollSync() {
+  const btn = document.getElementById("syncbtn"), msg = document.getElementById("msg");
+  const s = await (await fetch("/api/sync/status")).json();
+  if (s.running) {
+    msg.textContent = "正在拉取最新数据…";
+    setTimeout(pollSync, 3000);
+    return;
+  }
+  btn.disabled = false;
+  if (s.error) { msg.textContent = "拉取失败：" + s.error; return; }
+  msg.textContent = "已拉取最新数据 " + new Date(s.finished_at * 1000).toLocaleTimeString("zh-CN");
+  loadData();
+}
+// ---- 分组看板：把若干店铺归到一组看汇总 ----
+async function loadGroups() {
+  const start = state.start, end = state.end;
+  try {
+    const r = await fetch(`/api/groups?start=${start}&end=${end}`);
+    state.groups = (await r.json()).groups || [];
+  } catch (e) { state.groups = state.groups || []; }
+  renderGroups();
+}
+function renderGroups() {
+  const groups = state.groups || [];
+  const tb = document.querySelector("#groupT tbody");
+  const note = document.getElementById("groupNote");
+  if (!groups.length) {
+    tb.innerHTML = `<tr><td colspan="8" style="color:#999;text-align:center;padding:24px;">还没有分组，在上方输入名称后点「新建分组」</td></tr>`;
+    note.textContent = "";
+    return;
+  }
+  tb.innerHTML = groups.map(g => {
+    const names = g.accounts.map(id => esc(acctName(id))).join("、") || '<span style="color:#94a3b8">未选店铺</span>';
+    const m = g.metrics || {};
+    return `<tr><td>${esc(g.name)}</td><td style="text-align:left">${names}</td>` +
+      `<td class="hi">${fmt(m.gmv)}</td><td>${i(m.show)}</td>` +
+      `<td>${m.avg_gmv == null ? "-" : fmt(m.avg_gmv)}</td>` +
+      `<td>${m.r3 == null ? "-" : m.r3.toFixed(2) + "%"}</td>` +
+      `<td>${m.rend == null ? "-" : m.rend.toFixed(2) + "%"}</td>` +
+      `<td style="white-space:nowrap"><button class="mbtn" onclick="openGroupModal(${g.id})">编辑</button> ` +
+      `<button class="mbtn" onclick="removeGroup(${g.id})">删除</button></td></tr>`;
+  }).join("");
+  note.textContent = "3秒播放率、完播率来自罗盘导出的明细（MAPI 不提供），没导入的店铺计不进来，会显示「-」；" +
+    "比率按曝光数加权——先加总分子分母再相除，不是把各店比率平均。";
+}
+let gmEditId = null;
+function openGroupModal(gid) {
+  gmEditId = gid == null ? null : gid;
+  const g = gmEditId == null ? null : (state.groups || []).find(x => x.id === gmEditId);
+  document.getElementById("group-modal-title").textContent = g ? "编辑分组" : "新建分组";
+  document.getElementById("gm-name").value = g ? g.name : "";
+  const chosen = new Set(g ? g.accounts : []);
+  document.getElementById("gm-list").innerHTML = state.accounts.map(a => {
+    const id = a.advertiser_id;
+    return `<label class="gm-item"><input type="checkbox" value="${esc(id)}"${chosen.has(id) ? " checked" : ""}>` +
+      `${esc(acctName(id))}<span class="gm-id">${esc(id)}</span></label>`;
+  }).join("") || '<div class="sub" style="padding:10px 0">还没有已授权店铺</div>';
+  document.getElementById("group-modal").hidden = false;
+  document.getElementById("gm-name").focus();
+}
+function closeGroupModal() { document.getElementById("group-modal").hidden = true; }
+async function saveGroup() {
+  const nameEl = document.getElementById("gm-name");
+  const name = nameEl.value.trim();
+  if (!name) {
+    alert("请先填分组名称。");
+    nameEl.focus();
+    return;
+  }
+  const ids = [...document.querySelectorAll("#gm-list input:checked")].map(x => x.value);
+  const url = gmEditId == null ? "/api/groups" : `/api/groups/${gmEditId}`;
+  const method = gmEditId == null ? "POST" : "PUT";
+  let r;
+  try {
+    r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, advertiser_ids: ids }) });
+  } catch (e) {
+    alert("保存失败：连不上服务器（" + e.message + "）");
+    return;
+  }
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    alert("保存失败：" + (j.detail || r.status));
+    return;
+  }
+  closeGroupModal();
+  await loadGroups();
+}
+async function removeGroup(gid) {
+  const g = (state.groups || []).find(x => x.id === gid);
+  if (!confirm(`确认删除分组「${g ? g.name : gid}」？只删分组，店铺和数据都不受影响。`)) return;
+  await fetch(`/api/groups/${gid}`, { method: "DELETE" });
+  loadGroups();
+}
+
+(async () => {  // 页面打开时若已有同步在跑，接上状态
+  const s = await (await fetch("/api/sync/status")).json();
+  if (s.running) { document.getElementById("syncbtn").disabled = true; pollSync(); }
+})();
 initDates(); loadData();
 </script>
 </body>

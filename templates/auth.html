@@ -38,12 +38,17 @@
 
   <div class="card">
     <table>
-      <thead><tr><th>账号ID</th><th>名称</th><th>主体</th><th>状态</th><th>最后同步</th><th></th></tr></thead>
+      <thead><tr><th>账号ID</th><th>名称</th><th>主体</th><th>应用</th><th>状态</th><th>最后同步</th><th></th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </div>
 
   <div class="card">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; font-size:13px;">
+      <span style="color:#555;">用哪个应用授权：</span>
+      <select id="appsel" style="padding:6px 8px;border:1px solid #ccc;border-radius:6px;font-size:13px;"></select>
+      <span style="color:#999;font-size:12px;">店铺资质要在该应用的授权范围内，否则快手会拒绝</span>
+    </div>
     <div id="linkbox" style="display:none; margin-bottom:12px;">
       <div style="font-size:13px;color:#555;margin-bottom:6px;">把下面这条链接发给该店铺持有人，对方在自己浏览器登录店铺的快手账号后点同意：</div>
       <textarea id="linktext" readonly style="width:100%;height:70px;padding:8px;border:1px solid #ccc;border-radius:6px;font-size:12px;font-family:monospace;resize:vertical;"></textarea>
@@ -64,7 +69,7 @@ async function load() {
   const accounts = await r.json();
   const el = document.getElementById("rows");
   if (!accounts.length) {
-    el.innerHTML = `<tr><td colspan="6" style="color:#999;text-align:center;padding:30px;">还没有账号，点下方「复制授权链接」或「本机直接授权」接入第一个账号</td></tr>`;
+    el.innerHTML = `<tr><td colspan="7" style="color:#999;text-align:center;padding:30px;">还没有账号，点下方「复制授权链接」或「本机直接授权」接入第一个账号</td></tr>`;
     return;
   }
   el.innerHTML = accounts.map(a => {
@@ -73,9 +78,10 @@ async function load() {
       <td>${a.advertiser_id}</td>
       <td><input type="text" value="${a.name || ""}" onchange="save('${a.advertiser_id}', 'name', this.value)" placeholder="账号名"></td>
       <td><input type="text" value="${a.subject || ""}" onchange="save('${a.advertiser_id}', 'subject', this.value)" placeholder="所属主体"></td>
+      <td style="color:#888;font-size:12px;">${a.app_id || "-"}</td>
       <td><span class="dot ${cls}"></span>${label}</td>
       <td>${fmtTime(a.last_sync_at)}</td>
-      <td>${a.token_status !== "ok" ? `<button class="btn ghost" onclick="authorize()">重新授权</button>` : ""} <button class="btn ghost" onclick="remove('${a.advertiser_id}')">删除</button></td>
+      <td>${a.token_status !== "ok" ? `<button class="btn ghost" onclick="authorize('${a.app_id || ""}')">重新授权</button>` : ""} <button class="btn ghost" onclick="remove('${a.advertiser_id}')">删除</button></td>
     </tr>`;
   }).join("");
 }
@@ -88,9 +94,16 @@ async function remove(id) {
   await fetch(`/api/accounts/${id}`, { method: "DELETE" });
   load();
 }
-function authorize() { window.location = "/oauth/start"; }
+function appParam() {
+  const v = document.getElementById("appsel").value;
+  return v ? `?app=${encodeURIComponent(v)}` : "";
+}
+// 重新授权必须用该账号自己的应用（下拉框是给「新店铺」选应用的，选错会把账号绑到不对的应用上）
+function authorize(app) {
+  window.location = "/oauth/start" + (app ? `?app=${encodeURIComponent(app)}` : appParam());
+}
 async function copyLink() {
-  const r = await fetch("/api/authorize-url");
+  const r = await fetch("/api/authorize-url" + appParam());
   const { url } = await r.json();
   document.getElementById("linkbox").style.display = "";
   const ta = document.getElementById("linktext");
@@ -99,6 +112,16 @@ async function copyLink() {
   try { await navigator.clipboard.writeText(url); } catch (e) { document.execCommand("copy"); }
   alert("授权链接已复制，发给店铺持有人即可。");
 }
+async function loadApps() {
+  try {
+    const r = await fetch("/api/apps");
+    const { apps } = await r.json();
+    const sel = document.getElementById("appsel");
+    sel.innerHTML = (apps || []).map(id => `<option value="${id}">${id}</option>`).join("");
+    sel.addEventListener("change", () => { document.getElementById("linkbox").style.display = "none"; });
+  } catch (e) { /* 拿不到应用列表也不挡授权，留空即用默认应用 */ }
+}
+loadApps();
 load();
 </script>
 </body>

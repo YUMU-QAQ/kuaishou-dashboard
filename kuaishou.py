@@ -22,11 +22,27 @@ SCOPE = [
     "public_agent_service",
     "public_account_service",
 ]
+# 磁力引擎（非金牛）应用用无前缀 scope，且才有 v1/report/creative_report 等广告报表权限。
+# 目前只有这一个磁力引擎应用：165933836。
+ENGINE_SCOPE = [
+    "ad_query",
+    "ad_manage",
+    "report_service",
+    "account_service",
+    "public_dmp_service",
+    "public_agent_service",
+    "public_account_service",
+]
+ENGINE_APPS = {"165933836"}
 
 # storewideReport 金额单位是 1/1000 元（3608600 → 3608.60 元），ROI 用两字段相除（单位抵消）。
 STOREWIDE_SELECT_COLUMNS = ["t0_order_payment_amt", "cost_total", "show_cnt", "report_date_str"]
 STOREWIDE_CAMPAIGN_COLUMNS = ["campaign_id", "t0_order_payment_amt", "cost_total", "report_date_str"]
 STOREWIDE_PHOTO_COLUMNS = ["photo_id", "campaign_id", "t0_order_payment_amt", "cost_total", "report_date_str"]
+
+# 账户维度广告数据（v1/report/account_report）：比 storewideReport 多出播放率类字段。
+# 注意这不是全站口径，分母是行为数(played_num)，和罗盘「3秒播放数/曝光数」不一样。
+ACCOUNT_REPORT_COLUMNS = ["played_num", "played_three_seconds", "played_end"]
 
 
 def is_ai(title):
@@ -81,6 +97,32 @@ def config():
     }
 
 
+def apps():
+    """全部 MAPI 应用：{app_id: secret}。
+    配 APPS='id1:secret1,id2:secret2'（secret 里不能有逗号）；未设则退回单个 APP_ID/APP_SECRET。
+    多个应用的原因是快手要求广告主资质落在应用的授权范围内，不同资质的店铺只能用各自的应用。"""
+    out = {}
+    for part in os.environ.get("APPS", "").split(","):
+        if ":" in part:
+            aid, sec = part.split(":", 1)
+            if aid.strip():
+                out[aid.strip()] = sec.strip()
+    if not out:
+        aid = (os.environ.get("APP_ID") or "").strip()
+        if aid:
+            out[aid] = (os.environ.get("APP_SECRET") or "").strip()
+    return out
+
+
+def api_for(app_id=None):
+    """按 app_id 建客户端。app_id 为空或不在配置里时用配置中的第一个。无应用返回 None。"""
+    a = apps()
+    if not a:
+        return None
+    aid = app_id if app_id in a else next(iter(a))
+    return KuaishouAPI(aid, a[aid], config()["redirect_uri"])
+
+
 class KuaishouAPI:
     def __init__(self, app_id, secret, redirect_uri):
         self.app_id = app_id
@@ -88,7 +130,8 @@ class KuaishouAPI:
         self.redirect_uri = redirect_uri
 
     def authorize_url(self, state):
-        scope = quote(json.dumps(SCOPE, ensure_ascii=False, separators=(",", ":")))
+        scope = quote(json.dumps(ENGINE_SCOPE if self.app_id in ENGINE_APPS else SCOPE,
+                                 ensure_ascii=False, separators=(",", ":")))
         return (
             f"{AUTHORIZE_URL}?app_id={self.app_id}"
             f"&redirect_uri={quote(self.redirect_uri, safe='')}"
@@ -157,6 +200,18 @@ class KuaishouAPI:
         if resp is not None:
             resp.setdefault("data", {})["detail"] = detail_all
         return resp
+
+    def account_report(self, access_token, advertiser_id, start_date, end_date, columns=None):
+        """账户维度广告数据。返回 {stat_date: {played_num, played_3s, played_end}} 的原始行。
+        与 storewide_report 不同：start_date/end_date 是 YYYY-MM-DD 字符串，列参数叫 selected_column。"""
+        r = self._post("/v1/report/account_report", {
+            "advertiser_id": int(advertiser_id),
+            "start_date": start_date, "end_date": end_date,
+            "temporal_granularity": "DAILY",
+            "selected_column": columns or ACCOUNT_REPORT_COLUMNS,
+            "page": 1, "page_size": 200,
+        }, access_token)
+        return r
 
     def ad_search_campaigns(self, access_token, advertiser_id, start_date, end_date):
         """拿 campaign_id -> campaign_name 映射（ad/search 组维度，含计划名）。"""
@@ -269,7 +324,7 @@ def parse_storewide_campaign(resp, name_map, account_host=""):
 
 
 def parse_storewide_photo(resp, name_map):
-    """视频维度响应 -> {stat_date: {photo_id: {name, is_ai, charge, gmv, roi}}}。
+    """视频维度响应 -> {stat_date: {photo_id: {name, is_ai, campaign_id, charge, gmv, roi}}}。
     name_map 来自 filemanage_video_list；名字没同步时用 photo_id 兜底。"""
     out = {}
     for row in (resp.get("data") or {}).get("detail") or []:
@@ -280,10 +335,27 @@ def parse_storewide_photo(resp, name_map):
         cost = float(row.get("cost_total") or 0)
         amt = float(row.get("t0_order_payment_amt") or 0)
         name = name_map.get(pid, pid)
+        cid = str(row.get("campaign_id") or "") or None
         out.setdefault(date, {})[pid] = {
-            "name": name, "is_ai": is_ai(name),
+            "name": name, "is_ai": is_ai(name), "campaign_id": cid,
             "charge": round(cost / 1000, 2), "gmv": round(amt / 1000, 2),
             "roi": round(amt / cost, 4) if cost else 0.0,
+        }
+    return out
+
+
+def parse_account_report(resp):
+    """账户维度响应 -> {stat_date: {played_num, played_3s, played_end}}。
+    只给分子分母，比率在展示层 sum/sum 算（跨天平均比率是错的）。"""
+    out = {}
+    for row in (resp.get("data") or {}).get("details") or []:
+        date = row.get("stat_date")
+        if not date:
+            continue
+        out[date] = {
+            "played_num": float(row.get("played_num") or 0),
+            "played_3s": float(row.get("played_three_seconds") or 0),
+            "played_end": float(row.get("played_end") or 0),
         }
     return out
 

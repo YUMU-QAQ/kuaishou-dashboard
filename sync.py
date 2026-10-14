@@ -1,4 +1,4 @@
-"""每日拉数任务。cron 每日 09:30 调用，也可手动跑。
+"""每日拉数任务。cron 每日 09:01 调用，也可手动跑。
 
 流程：刷新各账号 token → 逐个账号拉数（首次回溯 90 天，之后回补 t-1~t-7）→ 断链告警。
 
@@ -24,16 +24,20 @@ def recent_dates(n):
     return [(today - timedelta(days=i)).isoformat() for i in range(1, n + 1)]
 
 
-def refresh_all(api):
-    """按 refresh_token 分组，每组只 refresh 一次，结果广播到组内所有账号。返回 {advertiser_id: access_token}。"""
+def refresh_all():
+    """按 (所属应用, refresh_token) 分组，每组只 refresh 一次，结果广播到组内所有账号。
+    同一 refresh_token 只属于一个应用，分组时带上 app_id 才不会拿错 secret 去刷。
+    返回 {advertiser_id: access_token}。"""
     groups = {}
     for acc in db.list_accounts():
         t = db.get_tokens(acc["advertiser_id"])
         if t and t.get("refresh_token"):
-            groups.setdefault(t["refresh_token"], []).append(acc["advertiser_id"])
+            key = (acc.get("app_id") or "", t["refresh_token"])
+            groups.setdefault(key, []).append(acc["advertiser_id"])
 
     result = {}
-    for rt, aids in groups.items():
+    for (app_id, rt), aids in groups.items():
+        api = kuaishou.api_for(app_id)
         try:
             resp = api.refresh(rt)
             if not api.ok(resp):
@@ -118,6 +122,16 @@ def sync_one(api, advertiser_id, access_token, force_full=False):
     start_date, end_date = days[-1], days[0]
 
     rows = fetch_account(api, access_token, advertiser_id, start_date, end_date)
+    # 3秒播放率/完播率：全站接口不提供，只有 v1/report/account_report 有。失败不致命，别拖垮整账号。
+    # 只覆盖 storewide 已有数据的日期——否则会把 charge/gmv 写成 NULL。
+    try:
+        play = kuaishou.parse_account_report(
+            api.account_report(access_token, advertiser_id, start_date, end_date))
+        for stat_date, d in play.items():
+            if stat_date in rows:
+                rows[stat_date].update(d)
+    except Exception as e:
+        print(f"{advertiser_id}: 播放率接口失败，本次跳过（{e}）")
     for stat_date, d in rows.items():
         db.upsert_daily(advertiser_id, stat_date, d)
 
@@ -138,7 +152,7 @@ def sync_one(api, advertiser_id, access_token, force_full=False):
     for stat_date, by_pid in photos.items():
         for pid, p in by_pid.items():
             db.upsert_photo(advertiser_id, pid, p["name"], p["is_ai"], stat_date,
-                            p["charge"], p["gmv"], p["roi"])
+                            p["charge"], p["gmv"], p["roi"], p.get("campaign_id"))
             n_photo += 1
 
     db.set_account(advertiser_id, token_status="ok", last_sync_at=time.time())
@@ -156,11 +170,10 @@ def main():
     db.init()
     kuaishou.load_env()
     cfg = kuaishou.config()
-    if not cfg["app_id"] or not cfg["secret"]:
-        print("缺少 APP_ID / APP_SECRET，请先填 .env", file=sys.stderr)
+    if not kuaishou.apps():
+        print("缺少应用配置：请在 .env 里填 APPS=app_id:secret[,...]（或 APP_ID/APP_SECRET）", file=sys.stderr)
         sys.exit(1)
 
-    api = kuaishou.KuaishouAPI(cfg["app_id"], cfg["secret"], cfg["redirect_uri"])
     force_full = "--force-full" in sys.argv
 
     accounts = db.list_accounts()
@@ -168,8 +181,8 @@ def main():
         print("还没有已授权账号。先访问 /auth 页完成授权。")
         return
 
-    tokens_by_aid = refresh_all(api)
-    broken = []
+    tokens_by_aid = refresh_all()
+    broken, failed = [], []
     for acc in accounts:
         aid = acc["advertiser_id"]
         at = tokens_by_aid.get(aid)
@@ -177,13 +190,25 @@ def main():
             broken.append(aid)
             print(f"{aid}: token 失败")
             continue
-        result = sync_one(api, aid, at, force_full)
-        print(f"{aid}: {result}")
+        # 每个账号用自己的应用（资质不同，应用不同）
+        try:
+            result = sync_one(kuaishou.api_for(acc.get("app_id")), aid, at, force_full)
+            print(f"{aid}: {result}")
+        except Exception as e:
+            # 单个账号失败不能拖垮整轮同步（否则后面的账号永远轮不到）
+            msg = str(e)
+            if "不在token账户管理下" in msg:
+                msg = "授权已失效，需该店铺重新授权（该账号已不在 token 授权范围内）"
+            failed.append(f"{aid}({msg})")
+            db.set_account(aid, token_status="broken")
+            print(f"{aid}: 失败 {msg}")
 
-    if broken:
-        names = ", ".join(broken)
-        alert(cfg["dingtalk_webhook"], f"快手看板：以下账号授权断链，数据停更，请重新授权：{names}")
+    if broken or failed:
+        names = ", ".join(broken + failed)
+        alert(cfg["dingtalk_webhook"], f"快手看板：以下账号同步失败，需人工处理：{names}")
     print("完成。断链账号：", broken if broken else "无")
+    if failed:
+        print("同步失败账号：", "; ".join(failed))
 
 
 if __name__ == "__main__":

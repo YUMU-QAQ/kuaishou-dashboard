@@ -33,7 +33,8 @@ def main():
 
     named = skip = 0
     # (账户ID, 视频ID, 计划ID, 时间) -> 聚合
-    agg = defaultdict(lambda: {"exposure": 0.0, "gmv3": 0.0, "r3n": 0.0, "ai": False})
+    agg = defaultdict(lambda: {"exposure": 0.0, "gmv3": 0.0, "r3n": 0.0, "rend": 0.0, "ai": False})
+    i_rend = idx.get("作品完播率")  # 老导出可能没有这列
     for r in rows[1:]:
         vid = str(r[idx["视频ID"]])
         name = str(r[idx["视频名称"]])
@@ -55,12 +56,15 @@ def main():
         g = agg[(aid, vid, cid, date)]
         g["exposure"] += exp
         g["gmv3"] += fnum(r[idx["3日累计GMV"]])
-        g["r3n"] += fnum(r[idx["作品3s完播率"]]) * exp  # 完播率(0~100)×曝光，加权分子
+        g["r3n"] += fnum(r[idx["作品3s完播率"]]) * exp   # 完播率(0~100)×曝光，加权分子
+        if i_rend is not None:
+            g["rend"] += fnum(r[i_rend]) * exp
         g["ai"] = g["ai"] or ai
 
     for (aid, vid, cid, date), g in agg.items():
         db.upsert_photo_daily(aid, vid, cid, date, round(g["exposure"], 2),
-                              round(g["gmv3"], 2), round(g["r3n"], 4), g["ai"])
+                              round(g["gmv3"], 2), round(g["r3n"], 4), g["ai"],
+                              round(g["rend"], 4) if i_rend is not None else None)
 
     print(f"名字映射 {named} 条（跳过 {skip} 条数字ID/空名）；补充指标 {len(agg)} 条 "
           f"（{len({k[3] for k in agg})} 个日期）")
