@@ -15,10 +15,9 @@ from typing import Optional
 import db
 import kuaishou
 import sync
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, Response
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 from openpyxl import Workbook
 
@@ -26,7 +25,6 @@ BASE = Path(__file__).resolve().parent
 app = FastAPI()
 # 接口响应动辄几 MB（/api/photos 一个月近万行），压缩后小 5 倍左右，加载快很多
 app.add_middleware(GZipMiddleware, minimum_size=500)
-security = HTTPBasic(auto_error=False)
 
 kuaishou.load_env()
 db.init()
@@ -41,16 +39,39 @@ CSV_COLUMNS = [
 ]
 
 
-def check_auth(credentials: Optional[HTTPBasicCredentials] = Depends(security)):
+COOKIE_NAME = "qy_session"
+SESSION_TTL = 7 * 24 * 3600
+# ponytail: 登录态存内存，进程重启（改 app.py 后重载）所有人需重新登录；要多实例/重启不掉线再换签名 Cookie
+SESSIONS: dict[str, float] = {}  # token -> 过期时间戳
+
+
+def _credentials_ok(username: str, password: str) -> bool:
     cfg = kuaishou.config()
     if not cfg["auth_password"]:
         return True  # 未配置密码 = 开发期不校验
-    if credentials is None or not (
-        secrets.compare_digest(credentials.username, cfg["auth_user"])
-        and secrets.compare_digest(credentials.password, cfg["auth_password"])
-    ):
-        raise HTTPException(401, "未授权", headers={"WWW-Authenticate": "Basic"})
+    return secrets.compare_digest(username, cfg["auth_user"]) and secrets.compare_digest(password, cfg["auth_password"])
+
+
+def _logged_in(request: Request) -> bool:
+    if not kuaishou.config()["auth_password"]:
+        return True
+    token = request.cookies.get(COOKIE_NAME, "")
+    exp = SESSIONS.get(token)
+    if not exp:
+        return False
+    if exp < time.time():
+        SESSIONS.pop(token, None)
+        return False
     return True
+
+
+def check_auth(request: Request):
+    if _logged_in(request):
+        return True
+    # 页面请求跳登入页；接口请求返回 401，由前端跳转
+    if request.url.path.startswith("/api"):
+        raise HTTPException(401, "未登录")
+    raise HTTPException(303, "未登录", headers={"Location": "/login"})
 
 
 def _api(app_id=None):
@@ -67,6 +88,33 @@ def _range(start: Optional[str], end: Optional[str]):
 
 
 # ---- 页面 ----
+
+@app.get("/login", response_class=FileResponse)
+def login_page():
+    return FileResponse(BASE / "templates" / "login.html")
+
+
+class LoginBody(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/api/login")
+def api_login(body: LoginBody, response: Response):
+    if not _credentials_ok(body.username, body.password):
+        raise HTTPException(401, "账号或密码不正确")
+    token = secrets.token_urlsafe(32)
+    SESSIONS[token] = time.time() + SESSION_TTL
+    response.set_cookie(COOKIE_NAME, token, max_age=SESSION_TTL, httponly=True, samesite="lax")
+    return {"ok": True}
+
+
+@app.post("/api/logout")
+def api_logout(request: Request, response: Response):
+    SESSIONS.pop(request.cookies.get(COOKIE_NAME, ""), None)
+    response.delete_cookie(COOKIE_NAME)
+    return {"ok": True}
+
 
 @app.get("/", dependencies=[Depends(check_auth)], response_class=FileResponse)
 def dashboard():

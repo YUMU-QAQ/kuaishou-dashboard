@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>快手每日数据看板</title>
+<title>青野快手数据看板</title>
 <style>
 :root{color-scheme:light;
 --primary:#1E40AF;--primary-hover:#1B3A9B;--secondary:#3B82F6;--accent:#D97706;
@@ -204,7 +204,7 @@ align-items:center;gap:10px}
 <body>
 <div class="sticky">
 <header class="topbar">
-  <h1>快手每日数据看板</h1>
+  <h1>青野快手数据看板</h1>
   <span id="range-label"></span>
   <nav class="jump">
     <a href="#sec-trend">趋势</a>
@@ -216,6 +216,7 @@ align-items:center;gap:10px}
     <a href="#sec-top10">Top10</a>
   </nav>
   <a href="/auth" class="authlink">授权管理</a>
+  <a href="#" class="authlink" onclick="logout();return false">退出</a>
 </header>
 
 <div class="bar">
@@ -337,6 +338,17 @@ align-items:center;gap:10px}
 </div>
 
 <script>
+// 登录态失效（接口 401）时统一跳登入页，不用每个请求单独处理
+const _fetch = window.fetch.bind(window);
+window.fetch = async (...a) => {
+  const r = await _fetch(...a);
+  if (r.status === 401) { location.href = "/login"; throw new Error("未登录"); }
+  return r;
+};
+async function logout() {
+  try { await fetch("/api/logout", { method: "POST" }); } catch (_) {}
+  location.href = "/login";
+}
 const COLS = [
   ["advertiser_id","账号"],["stat_date","日期"],["charge","花费(元)"],["show","曝光数"],
   ["gmv","全站GMV"],["roi","全站ROI"],
